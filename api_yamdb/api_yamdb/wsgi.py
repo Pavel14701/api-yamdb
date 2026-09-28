@@ -1,5 +1,4 @@
-"""
-WSGI config for YaMDb project.
+"""WSGI config for YaMDb project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
 
