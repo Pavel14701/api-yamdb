@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'dev/**'
+      - '**-dev'
+      - '**_dev_**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  pavel:
+    name: CI — pavel
+    if: >-
+      github.ref_name == 'main' ||
+      contains(github.ref_name, 'pavel') ||
+      (github.event_name == 'pull_request' && contains(github.head_ref, 'pavel'))
+    uses: ./.github/workflows/dev-ci.yml
+    with:
+      developer: pavel
+
+  karina:
+    name: CI — karina
+    if: >-
+      github.ref_name == 'main' ||
+      contains(github.ref_name, 'karina') ||
+      (github.event_name == 'pull_request' && contains(github.head_ref, 'karina'))
+    uses: ./.github/workflows/dev-ci.yml
+    with:
+      developer: karina
+
+  elena:
+    name: CI — elena
+    if: >-
+      github.ref_name == 'main' ||
+      contains(github.ref_name, 'elena') ||
+      (github.event_name == 'pull_request' && contains(github.head_ref, 'elena'))
+    uses: ./.github/workflows/dev-ci.yml
+    with:
+      developer: elena
