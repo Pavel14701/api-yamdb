@@ -1,0 +1,26 @@
+[project]
+name = "api-yamdb"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "Django==5.1.1",
+    "djangorestframework==3.15.2",
+    "djangorestframework-simplejwt==5.4.0",
+    "djoser==2.3.1",
+    "coreapi==2.3.3",
+    "pillow==11.0.0",
+    "requests==2.32.3",
+    "social-auth-app-django==5.4.2",
+    "setuptools<81",
+]
+
+[dependency-groups]
+dev = [
+    "flake8==7.1.1",
+    "pytest==8.3.3",
+    "pytest-django==4.9.0",
+    "pytest-pythonpath==0.7.3",
+]
+
