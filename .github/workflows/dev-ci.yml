@@ -1,16 +1,61 @@
+# Переиспользуемый CI-workflow разработчика: каждая проверка — отдельная
+# атомарная джоба. Вызывается из .github/workflows/ci.yml отдельно
+# для каждого разработчика.
 name: Developer CI
 
 on:
   workflow_call:
     inputs:
       developer:
-        description: 'Имя разработчика (для подписи джобы)'
+        description: 'Имя разработчика (для подписи джоб)'
+        required: true
+        type: string
+      test-paths:
+        description: 'Пути к тестам разработчика (аргументы pytest)'
         required: true
         type: string
 
 jobs:
-  ci:
-    name: CI — ${{ inputs.developer }}
+  ruff:
+    name: Ruff — ${{ inputs.developer }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Ruff (lint)
+        run: ruff check .
+
+  flake8:
+    name: Flake8 — ${{ inputs.developer }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install flake8
+        run: pip install flake8
+
+      - name: Flake8 (lint)
+        run: flake8
+
+  mypy:
+    name: Mypy — ${{ inputs.developer }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -24,18 +69,29 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install ruff mypy django-stubs djangorestframework-stubs django-stubs-ext
-
-      - name: Ruff (lint)
-        run: ruff check .
-
-      - name: Flake8 (lint)
-        run: flake8
+          pip install django-stubs djangorestframework-stubs django-stubs-ext
 
       - name: Mypy (types)
         run: mypy
 
-      - name: Pytest
-        run: pytest
+  pytest:
+    name: Pytest — ${{ inputs.developer }}
+    runs-on: ubuntu-latest
+    env:
+      TEST_PATHS: ${{ inputs.test-paths }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pytest (own tests only)
+        run: pytest $TEST_PATHS

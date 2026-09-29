@@ -1,3 +1,8 @@
+# CI-диспетчер: отдельный вызов переиспользуемого workflow
+# (.github/workflows/dev-ci.yml) на каждого разработчика. Внутри вызова
+# каждая проверка (ruff, flake8, mypy, pytest) — отдельная атомарная джоба.
+#
+# Запуск: пуш в ветку разработчика, PR в main, пуш в main.
 name: CI
 
 on:
@@ -12,6 +17,12 @@ on:
       - main
 
 jobs:
+  # Job разработчика выполняется, если его имя входит в имя ветки
+  # (например, для pavel: pavel-dev, dev/pavel/auth, pavel_dev_branch).
+  # На push в main и в pull request выполняются все джобы.
+  #
+  # Чтобы добавить нового разработчика, скопируйте job ниже, подставьте
+  # его имя в if и name и перечислите его тесты в with.test-paths.
   pavel:
     name: CI — pavel
     if: >-
@@ -21,6 +32,11 @@ jobs:
     uses: ./.github/workflows/dev-ci.yml
     with:
       developer: pavel
+      # Пользователи, регистрация, токены и структурные проверки проекта.
+      test-paths: >-
+        tests/test_00_user_registration.py
+        tests/test_01_users.py
+        tests/test_07_files.py
 
   karina:
     name: CI — karina
@@ -31,6 +47,11 @@ jobs:
     uses: ./.github/workflows/dev-ci.yml
     with:
       developer: karina
+      # Категории, жанры, произведения.
+      test-paths: >-
+        tests/test_02_category.py
+        tests/test_03_genre.py
+        tests/test_04_title.py
 
   elena:
     name: CI — elena
@@ -41,3 +62,7 @@ jobs:
     uses: ./.github/workflows/dev-ci.yml
     with:
       developer: elena
+      # Отзывы и комментарии.
+      test-paths: >-
+        tests/test_05_review.py
+        tests/test_06_comment.py
