@@ -1,3 +1,5 @@
+"""Модуль моделей API: категории, жанры и произведения."""
+
 from django.db import models
 
 
@@ -15,6 +17,8 @@ class Category(models.Model):
     )
 
     class Meta:
+        """Настройки метаданных модели Category."""
+
         verbose_name = 'Категория'
         verbose_name_plural = 'Категории'
         ordering = ('name',)
@@ -38,6 +42,8 @@ class Genre(models.Model):
     )
 
     class Meta:
+        """Настройки метаданных модели Genre."""
+
         verbose_name = 'Жанр'
         verbose_name_plural = 'Жанры'
         ordering = ('name',)
@@ -76,6 +82,8 @@ class Title(models.Model):
     )
 
     class Meta:
+        """Настройки метаданных модели Title."""
+
         verbose_name = 'Произведение'
         verbose_name_plural = 'Произведения'
         ordering = ('name',)
