@@ -3,54 +3,45 @@
 from django.db import models
 
 
-class Category(models.Model):
+class BaseNameSlugModel(models.Model):
+    """Абстрактная базовая модель с полями name и slug."""
+
+    name = models.CharField(
+        max_length=256,
+        verbose_name='Название',
+    )
+    slug = models.SlugField(
+        max_length=50,
+        unique=True,
+        verbose_name='Slug',
+    )
+
+    class Meta:
+        """Настройки метаданных для всех наследуемых моделей."""
+        abstract = True
+        ordering = ('name',)
+
+    def __str__(self) -> str:
+        """Возвращает название объекта."""
+        return self.name
+
+
+class Category(BaseNameSlugModel):
     """Модель категории произведений."""
 
-    name = models.CharField(
-        max_length=256,
-        verbose_name='Название категории',
-    )
-    slug = models.SlugField(
-        max_length=50,
-        unique=True,
-        verbose_name='Slug категории',
-    )
-
-    class Meta:
+    class Meta(BaseNameSlugModel.Meta):
         """Настройки метаданных модели Category."""
-
         verbose_name = 'Категория'
         verbose_name_plural = 'Категории'
-        ordering = ('name',)
-
-    def __str__(self) -> str:
-        """Возвращает название категории."""
-        return self.name
 
 
-class Genre(models.Model):
+class Genre(BaseNameSlugModel):
     """Модель жанра произведения."""
 
-    name = models.CharField(
-        max_length=256,
-        verbose_name='Название жанра',
-    )
-    slug = models.SlugField(
-        max_length=50,
-        unique=True,
-        verbose_name='Slug жанра',
-    )
-
-    class Meta:
+    class Meta(BaseNameSlugModel.Meta):
         """Настройки метаданных модели Genre."""
-
         verbose_name = 'Жанр'
         verbose_name_plural = 'Жанры'
-        ordering = ('name',)
-
-    def __str__(self) -> str:
-        """Возвращает название жанра."""
-        return self.name
 
 
 class Title(models.Model):
@@ -83,7 +74,6 @@ class Title(models.Model):
 
     class Meta:
         """Настройки метаданных модели Title."""
-
         verbose_name = 'Произведение'
         verbose_name_plural = 'Произведения'
         ordering = ('name',)
