@@ -21,6 +21,10 @@ jobs:
     uses: ./.github/workflows/dev-ci.yml
     with:
       developer: pavel
+      test-paths: >-
+        tests/test_00_user_registration.py
+        tests/test_01_users.py
+        tests/test_07_files.py
 
   karina:
     name: CI — karina
@@ -31,6 +35,10 @@ jobs:
     uses: ./.github/workflows/dev-ci.yml
     with:
       developer: karina
+      test-paths: >-
+        tests/test_02_category.py
+        tests/test_03_genre.py
+        tests/test_04_title.py
 
   elena:
     name: CI — elena
@@ -41,3 +49,6 @@ jobs:
     uses: ./.github/workflows/dev-ci.yml
     with:
       developer: elena
+      test-paths: >-
+        tests/test_05_review.py
+        tests/test_06_comment.py
