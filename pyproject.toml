@@ -15,6 +15,7 @@ dependencies = [
     "requests==2.32.3",
     "social-auth-app-django==5.4.2",
     "setuptools<81",
+    "django-filter>=25.1",
 ]
 
 [dependency-groups]
