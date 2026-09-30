@@ -1,15 +1,18 @@
 """Сериализаторы для отзывов и комментариев."""
 
+from typing import Any
+
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from reviews.models import Comment, Review
+from users.models import User
 
 
-class ReviewSerializer(serializers.ModelSerializer):
+class ReviewSerializer(serializers.ModelSerializer[Review]):
     """Сериализатор для работы с моделью отзывов (Review)."""
 
-    author = serializers.SlugRelatedField(
+    author = serializers.SlugRelatedField[User](
         slug_field='username',
         read_only=True,
     )
@@ -21,12 +24,13 @@ class ReviewSerializer(serializers.ModelSerializer):
         fields = ('id', 'text', 'author', 'score', 'pub_date')
         read_only_fields = ('author', 'pub_date')
 
-    def validate(self, data):
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         """Проверка уникальности отзыва."""
         request = self.context.get('request')
-        if request and request.method == 'POST':
+        view = self.context.get('view')
+        if request and view and request.method == 'POST':
             author = request.user
-            title_id = self.context.get('view').kwargs.get('title_id')
+            title_id = view.kwargs.get('title_id')
             if Review.objects.filter(
                 author=author, title_id=title_id
             ).exists():
@@ -36,10 +40,10 @@ class ReviewSerializer(serializers.ModelSerializer):
         return data
 
 
-class CommentSerializer(serializers.ModelSerializer):
+class CommentSerializer(serializers.ModelSerializer[Comment]):
     """Сериализатор для работы с моделью комментариев (Comment)."""
 
-    author = serializers.SlugRelatedField(
+    author = serializers.SlugRelatedField[User](
         slug_field='username',
         read_only=True,
     )
