@@ -25,6 +25,7 @@ jobs:
         tests/test_00_user_registration.py
         tests/test_01_users.py
         tests/test_07_files.py
+        tests/test_08_import_csv.py
 
   karina:
     name: CI — karina
