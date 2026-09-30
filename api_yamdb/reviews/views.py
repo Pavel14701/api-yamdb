@@ -1,16 +1,14 @@
 """ViewSet для отзывов, комментариев, категорий, жанров и произведений."""
 
-from django.shortcuts import get_object_or_404
-from rest_framework import status, viewsets
-from rest_framework.response import Response
-from django.db.models import Avg
-from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
-from rest_framework import viewsets, mixins, filters
+from django.db.models import Avg, QuerySet
+from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, mixins, viewsets
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.serializers import BaseSerializer, ModelSerializer
 
 from api.permissions import IsAdminOrReadOnly, IsAuthorModeratorAdminOrReadOnly
-from reviews.models import Category, Genre, Review, Title
 from api.serializers import (
     CategorySerializer,
     CommentSerializer,
@@ -19,6 +17,7 @@ from api.serializers import (
     TitleReadSerializer,
     TitleWriteSerializer,
 )
+from reviews.models import Category, Comment, Genre, Review, Title
 
 
 class ReviewPagination(PageNumberPagination):
@@ -39,6 +38,8 @@ class TitleFilter(django_filters.FilterSet):
     year = django_filters.NumberFilter(field_name='year')
 
     class Meta:
+        """Настройки фильтра Title."""
+
         model = Title
         fields = ('category', 'genre', 'name', 'year')
 
@@ -47,7 +48,7 @@ class CategoryViewSet(
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
     mixins.DestroyModelMixin,
-    viewsets.GenericViewSet,
+    viewsets.GenericViewSet[Category],
 ):
     """ViewSet для категорий: список, создание, удаление по slug."""
 
@@ -64,7 +65,7 @@ class GenreViewSet(
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
     mixins.DestroyModelMixin,
-    viewsets.GenericViewSet,
+    viewsets.GenericViewSet[Genre],
 ):
     """ViewSet для жанров: список, создание, удаление по slug."""
 
@@ -77,7 +78,7 @@ class GenreViewSet(
     lookup_field = 'slug'
 
 
-class TitleViewSet(viewsets.ModelViewSet):
+class TitleViewSet(viewsets.ModelViewSet[Title]):
     """ViewSet для произведений: полный CRUD с фильтрацией."""
 
     queryset = Title.objects.annotate(rating=Avg('reviews__score'))
@@ -87,38 +88,41 @@ class TitleViewSet(viewsets.ModelViewSet):
     filterset_class = TitleFilter
     http_method_names = ['get', 'post', 'patch', 'delete']
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[ModelSerializer[Title]]:
+        """Возвращает сериализатор чтения или записи по экшену."""
         if self.action in ('create', 'update', 'partial_update'):
             return TitleWriteSerializer
         return TitleReadSerializer
 
 
-class ReviewViewSet(viewsets.ModelViewSet):
+class ReviewViewSet(viewsets.ModelViewSet[Review]):
     """ViewSet для работы с отзывами."""
 
     permission_classes = (IsAuthorModeratorAdminOrReadOnly,)
     pagination_class = ReviewPagination
     serializer_class = ReviewSerializer
+    http_method_names = ['get', 'post', 'patch', 'delete']
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Review]:
         """Возвращает QuerySet отзывов для конкретного произведения."""
         title = get_object_or_404(Title, id=self.kwargs.get('title_id'))
         return title.reviews.all()
 
-    def perform_create(self, serializer):
+    def perform_create(self, serializer: BaseSerializer[Review]) -> None:
         """Сохраняет отзыв с привязкой к произведению и автору."""
         title = get_object_or_404(Title, id=self.kwargs.get('title_id'))
         serializer.save(author=self.request.user, title=title)
 
 
-class CommentViewSet(viewsets.ModelViewSet):
+class CommentViewSet(viewsets.ModelViewSet[Comment]):
     """ViewSet для работы с комментариями."""
 
     permission_classes = (IsAuthorModeratorAdminOrReadOnly,)
     pagination_class = ReviewPagination
     serializer_class = CommentSerializer
+    http_method_names = ['get', 'post', 'patch', 'delete']
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Comment]:
         """Возвращает QuerySet комментариев к конкретному отзыву."""
         review = get_object_or_404(
             Review,
@@ -127,7 +131,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         )
         return review.comments.all()
 
-    def perform_create(self, serializer):
+    def perform_create(self, serializer: BaseSerializer[Comment]) -> None:
         """Сохраняет комментарий с привязкой к отзыву и автору."""
         review = get_object_or_404(
             Review,

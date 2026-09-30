@@ -67,7 +67,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install mypy django-stubs djangorestframework-stubs django-stubs-ext
+          pip install mypy django-stubs djangorestframework-stubs django-stubs-ext types-django-filter
 
       - name: Mypy (types)
         run: mypy
