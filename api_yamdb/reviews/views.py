@@ -1,7 +1,8 @@
 """ViewSet для отзывов, комментариев, категорий, жанров и произведений."""
 
 import django_filters
-from django.db.models import Avg, QuerySet
+from django.db.models import Avg, IntegerField, QuerySet
+from django.db.models.functions import Round
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, mixins, viewsets
@@ -81,12 +82,18 @@ class GenreViewSet(
 class TitleViewSet(viewsets.ModelViewSet[Title]):
     """ViewSet для произведений: полный CRUD с фильтрацией."""
 
-    queryset = Title.objects.annotate(rating=Avg('reviews__score'))
+    queryset = Title.objects.all()
     permission_classes = (IsAdminOrReadOnly,)
     pagination_class = ReviewPagination
     filter_backends = (DjangoFilterBackend,)
     filterset_class = TitleFilter
     http_method_names = ['get', 'post', 'patch', 'delete']
+
+    def get_queryset(self):
+        """Возвращает список произведений с целым округленным рейтингом."""
+        return Title.objects.annotate(
+            rating=Round(Avg('reviews__score'), output_field=IntegerField())
+        ).order_by('name')
 
     def get_serializer_class(self) -> type[ModelSerializer[Title]]:
         """Возвращает сериализатор чтения или записи по экшену."""
