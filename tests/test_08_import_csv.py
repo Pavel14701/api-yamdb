@@ -156,3 +156,16 @@ class Test08ImportCsv:
             'update_or_create/get_or_create или очистку таблиц перед '
             'загрузкой.'
         )
+
+    def test_10_pub_dates_from_csv(self):
+        load()
+        csv_reviews = {row['id']: row for row in read_csv('review.csv')}
+        for review in Review.objects.all():
+            expected = csv_reviews[str(review.id)]['pub_date']
+            actual = review.pub_date.strftime('%Y-%m-%dT%H:%M')
+            assert actual.startswith(expected[:16]), (
+                f'У отзыва id={review.id} дата {actual}, а в csv — '
+                f'{expected}. Поле pub_date имеет auto_now_add и '
+                'перезаписывает дату из файла: проставьте дату из csv '
+                'явно после создания записи.'
+            )
