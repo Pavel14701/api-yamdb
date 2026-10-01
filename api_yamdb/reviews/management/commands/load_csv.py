@@ -91,10 +91,16 @@ class Command(BaseCommand):
                             value = int(value)
                         defaults[field] = value
 
-                    model.objects.update_or_create(
+                    obj, _ = model.objects.update_or_create(
                         id=row['id'],
                         defaults=defaults
                     )
+                    if 'pub_date' in defaults:
+                        # auto_now_add игнорирует переданную дату при
+                        # создании — проставляем дату из csv явно
+                        model.objects.filter(pk=obj.pk).update(
+                            pub_date=defaults['pub_date']
+                        )
                     count += 1
 
                 except Exception as e:
