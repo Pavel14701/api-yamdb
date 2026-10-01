@@ -89,7 +89,7 @@ class TitleViewSet(viewsets.ModelViewSet[Title]):
     filterset_class = TitleFilter
     http_method_names = ['get', 'post', 'patch', 'delete']
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Title]:
         """Возвращает список произведений с целым округленным рейтингом."""
         return Title.objects.annotate(
             rating=Round(Avg('reviews__score'), output_field=IntegerField())

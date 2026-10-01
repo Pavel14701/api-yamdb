@@ -2,6 +2,7 @@
 
 import csv
 from pathlib import Path
+from typing import Any
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -15,7 +16,7 @@ class Command(BaseCommand):
 
     help = 'Импортирует данные из CSV файлов в базу данных'
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         """Основная логика выполнения команды."""
         data_dir = Path(settings.BASE_DIR) / 'static' / 'data'
 
@@ -58,14 +59,19 @@ class Command(BaseCommand):
             'Все данные успешно импортированы'
         ))
 
-    def _import_csv(self, file_path, model, fields):
+    def _import_csv(
+        self,
+        file_path: Path,
+        model: type[Any],
+        fields: list[str],
+    ) -> None:
         """Импортирует данные из CSV в указанную модель."""
         if not file_path.exists():
             self.stdout.write(self.style.ERROR(f'Файл не найден: {file_path}'))
             return
 
         count = 0
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -102,7 +108,7 @@ class Command(BaseCommand):
             f'Импортировано {count} записей модели {model.__name__}'
         )
 
-    def _import_genre_titles(self, file_path):
+    def _import_genre_titles(self, file_path: Path) -> None:
         """Импортирует связи жанр-произведение (M2M)."""
         if not file_path.exists():
             self.stdout.write(self.style.ERROR(f'Файл не найден: {file_path}'))
@@ -110,7 +116,7 @@ class Command(BaseCommand):
 
         count = 0
         genre_title_relation = Title.genre.through
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
