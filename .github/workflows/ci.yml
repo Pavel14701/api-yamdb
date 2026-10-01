@@ -4,18 +4,21 @@ on:
   push:
     branches:
       - main
+      - develop
       - 'dev/**'
       - '**-dev'
       - '**_dev_**'
   pull_request:
     branches:
       - main
+      - develop
 
 jobs:
   pavel:
     name: CI — pavel
     if: >-
       github.ref_name == 'main' ||
+      github.ref_name == 'develop' ||
       contains(github.ref_name, 'pavel') ||
       (github.event_name == 'pull_request' && contains(github.head_ref, 'pavel'))
     uses: ./.github/workflows/dev-ci.yml
@@ -25,11 +28,13 @@ jobs:
         tests/test_00_user_registration.py
         tests/test_01_users.py
         tests/test_07_files.py
+        tests/test_08_import_csv.py
 
   karina:
     name: CI — karina
     if: >-
       github.ref_name == 'main' ||
+      github.ref_name == 'develop' ||
       contains(github.ref_name, 'karina') ||
       (github.event_name == 'pull_request' && contains(github.head_ref, 'karina'))
     uses: ./.github/workflows/dev-ci.yml
@@ -44,6 +49,7 @@ jobs:
     name: CI — elena
     if: >-
       github.ref_name == 'main' ||
+      github.ref_name == 'develop' ||
       contains(github.ref_name, 'elena') ||
       (github.event_name == 'pull_request' && contains(github.head_ref, 'elena'))
     uses: ./.github/workflows/dev-ci.yml
