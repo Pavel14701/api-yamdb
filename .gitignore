@@ -149,3 +149,5 @@ dmypy.json
 media/
 
 .ruff_cache
+review_results_files
+review_results.html
