@@ -8,8 +8,12 @@ from api import views
 router_v1 = DefaultRouter()
 router_v1.register('users', views.UserViewSet, basename='users')
 
+auth_urls = [
+    path('signup/', views.signup, name='signup'),
+    path('token/', views.obtain_token, name='token'),
+]
+
 urlpatterns = [
-    path('auth/signup/', views.signup, name='signup'),
-    path('auth/token/', views.obtain_token, name='token'),
+    path('auth/', include(auth_urls)),
     path('', include(router_v1.urls)),
 ]
