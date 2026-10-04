@@ -1,4 +1,7 @@
+"""Фильтры для API."""
+
 import django_filters
+
 from reviews.models import Title
 
 
