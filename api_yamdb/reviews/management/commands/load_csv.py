@@ -59,6 +59,64 @@ class Command(BaseCommand):
             'Все данные успешно импортированы'
         ))
 
+    def _parse_row(
+            self,
+            row: dict[str, Any],
+            fields: tuple[str, ...],
+    ) -> dict[str, Any] | None:
+        """Парсит строку CSV и возвращает словарь."""
+        row_id = row.get('id', '?')
+        try:
+            defaults = {}
+            for field in fields:
+                if field == 'id':
+                    continue
+                csv_field = field
+                if field in {'category_id', 'author_id'}:
+                    csv_field = field.replace('_id', '')
+
+                field_value = row[csv_field]
+                if field in {
+                    'year', 'score', 'category_id',
+                    'title_id', 'author_id', 'review_id'
+                }:
+                    field_value = int(field_value)
+                defaults[field] = field_value
+            return defaults
+        except (KeyError, ValueError) as parse_error:
+            self.stdout.write(
+                self.style.WARNING(
+                    f'Ошибка парсинга в строке {row_id}: {parse_error}'
+                )
+            )
+            return None
+
+    def _save_row(
+        self,
+        model: type[Any],
+        row: dict[str, Any],
+        defaults: dict[str, Any],
+    ) -> bool:
+        """Сохраняет строку в БД. Возвращает True при успехе, иначе False."""
+        row_id = row.get('id', '?')
+        try:
+            obj, _ = model.objects.update_or_create(
+                id=row['id'],
+                defaults=defaults
+            )
+            if 'pub_date' in defaults:
+                model.objects.filter(pk=obj.pk).update(
+                    pub_date=defaults['pub_date']
+                )
+            return True
+        except Exception as error:
+            self.stdout.write(
+                self.style.WARNING(
+                    f'Ошибка в строке {row_id}: {error}'
+                )
+            )
+        return False
+
     def _import_csv(
         self,
         file_path: Path,
@@ -74,51 +132,11 @@ class Command(BaseCommand):
         with open(file_path, encoding='utf-8') as csv_file:
             reader = csv.DictReader(csv_file)
             for row in reader:
-                defaults = {}
-                row_id = row.get('id', '?')
-                try:
-                    for field in fields:
-                        if field == 'id':
-                            continue
-                        csv_field = field
-                        if field in {'category_id', 'author_id'}:
-                            csv_field = field.replace('_id', '')
-
-                        field_value = row[csv_field]
-                        if field in {
-                            'year', 'score', 'category_id',
-                            'title_id', 'author_id', 'review_id'
-                        }:
-                            field_value = int(field_value)
-                        defaults[field] = field_value
-
-                except (KeyError, ValueError) as parse_error:
-                    self.stdout.write(
-                        self.style.WARNING(
-                            f'Ошибка парсинга в строке {row_id}: {parse_error}'
-                        )
-                    )
+                defaults = self._parse_row(row, fields)
+                if defaults is None:
                     continue
-                try:
-
-                    obj, _ = model.objects.update_or_create(
-                        id=row['id'],
-                        defaults=defaults
-                    )
-                    if 'pub_date' in defaults:
-                        # auto_now_add игнорирует переданную дату при
-                        # создании — проставляем дату из csv явно
-                        model.objects.filter(pk=obj.pk).update(
-                            pub_date=defaults['pub_date']
-                        )
+                if self._save_row(model, row, defaults):
                     count += 1
-
-                except Exception as error:
-                    self.stdout.write(
-                        self.style.WARNING(
-                            f'Ошибка в строке {row_id}: {error}'
-                        )
-                    )
 
         self.stdout.write(
             f'Импортировано {count} записей модели {model.__name__}'
