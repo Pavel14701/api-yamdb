@@ -28,6 +28,60 @@ YaMDb собирает отзывы пользователей на произв
 Права: аноним — только чтение; автор отзыва/комментария, модератор и
 администратор — запись/удаление по иерархии ролей.
 
+## Примеры запросов
+
+Базовый URL: `http://127.0.0.1:8000/api/v1/`
+
+### 1. Регистрация и получение токена
+
+```bash
+# регистрация — на почту придёт confirmation_code
+curl -X POST http://127.0.0.1:8000/api/v1/auth/signup/ \
+  -H "Content-Type: application/json" \
+  -d '{"username": "new_user", "email": "user@example.com"}'
+
+# обмен confirmation_code на JWT-токен
+curl -X POST http://127.0.0.1:8000/api/v1/auth/token/ \
+  -H "Content-Type: application/json" \
+  -d '{"username": "new_user", "confirmation_code": "<код из письма>"}'
+```
+
+Ответ содержит `token` — далее передаём его в заголовке:
+`Authorization: Bearer <token>`.
+
+### 2. Чтение (доступно и без токена)
+
+```bash
+# список произведений с фильтрами (категория, жанр, год, имя)
+curl "http://127.0.0.1:8000/api/v1/titles/?genre=comedy&year=2019&name=bohem"
+
+# категории и жанры
+curl http://127.0.0.1:8000/api/v1/categories/
+curl http://127.0.0.1:8000/api/v1/genres/
+
+# отзывы и комментарии к произведению
+curl http://127.0.0.1:8000/api/v1/titles/1/reviews/
+curl http://127.0.0.1:8000/api/v1/titles/1/reviews/1/comments/
+```
+
+### 3. Запись (нужен токен)
+
+```bash
+# свой профиль
+curl http://127.0.0.1:8000/api/v1/users/me/ \
+  -H "Authorization: Bearer <token>"
+
+# отзыв с оценкой 1–10 (только аутентифицированный)
+curl -X POST http://127.0.0.1:8000/api/v1/titles/1/reviews/ \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"text": "Отличный фильм!", "score": 9}'
+
+# комментарий к отзыву
+curl -X POST http://127.0.0.1:8000/api/v1/titles/1/reviews/1/comments/ \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"text": "Согласен, шедевр"}'
+```
+
 ## Документация
 
 Полное описание эндпоинтов — Redoc: `http://127.0.0.1:8000/redoc/`
