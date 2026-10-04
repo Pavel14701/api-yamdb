@@ -15,12 +15,12 @@ from reviews.constants import (
 from users.models import User
 
 
-def current_year():
+def current_year() -> int:
     """Возвращает текущий год."""
     return datetime.now().year
 
 
-def validate_year(value):
+def validate_year(value: int) -> None:
     """Валидатор: год не должен быть больше текущего."""
     if value > current_year():
         raise ValidationError(
@@ -107,6 +107,7 @@ class Title(models.Model):
 
 
 class Review(models.Model):
+    """Модель отзыва на произведение."""
     title = models.ForeignKey(
         Title,
         on_delete=models.CASCADE,
@@ -145,10 +146,12 @@ class Review(models.Model):
         ]
 
     def __str__(self) -> str:
+        """Возвращает краткое описание отзыва (автор и произведение)."""
         return f'Отзыв от {self.author} на {self.title}'
 
 
 class Comment(models.Model):
+    """Модель комментария к отзыву."""
     review = models.ForeignKey(
         Review,
         on_delete=models.CASCADE,
@@ -174,4 +177,5 @@ class Comment(models.Model):
         ordering = ('-pub_date',)
 
     def __str__(self) -> str:
+        """Возвращает краткое описание комментария (автор и ID отзыва)."""
         return f'Комментарий от {self.author} к отзыву {self.review.id}'
