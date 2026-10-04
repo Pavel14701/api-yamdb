@@ -23,35 +23,35 @@ class Command(BaseCommand):
         self._import_csv(
             data_dir / 'category.csv',
             Category,
-            ['id', 'name', 'slug']
+            ('id', 'name', 'slug')
         )
         self._import_csv(
             data_dir / 'genre.csv',
             Genre,
-            ['id', 'name', 'slug']
+            ('id', 'name', 'slug')
         )
         self._import_csv(
             data_dir / 'users.csv',
             User,
-            [
+            (
                 'id', 'username', 'email', 'role', 'bio',
                 'first_name', 'last_name'
-            ]
+            )
         )
         self._import_csv(
             data_dir / 'titles.csv',
             Title,
-            ['id', 'name', 'year', 'category_id']
+            ('id', 'name', 'year', 'category_id')
         )
         self._import_csv(
             data_dir / 'review.csv',
             Review,
-            ['id', 'title_id', 'text', 'author_id', 'score', 'pub_date']
+            ('id', 'title_id', 'text', 'author_id', 'score', 'pub_date')
         )
         self._import_csv(
             data_dir / 'comments.csv',
             Comment,
-            ['id', 'review_id', 'text', 'author_id', 'pub_date']
+            ('id', 'review_id', 'text', 'author_id', 'pub_date')
         )
         self._import_genre_titles(data_dir / 'genre_title.csv')
 
@@ -59,11 +59,69 @@ class Command(BaseCommand):
             'Все данные успешно импортированы'
         ))
 
+    def _parse_row(
+            self,
+            row: dict[str, Any],
+            fields: tuple[str, ...],
+    ) -> dict[str, Any] | None:
+        """Парсит строку CSV и возвращает словарь."""
+        row_id = row.get('id', '?')
+        try:
+            defaults = {}
+            for field in fields:
+                if field == 'id':
+                    continue
+                csv_field = field
+                if field in {'category_id', 'author_id'}:
+                    csv_field = field.replace('_id', '')
+
+                field_value = row[csv_field]
+                if field in {
+                    'year', 'score', 'category_id',
+                    'title_id', 'author_id', 'review_id'
+                }:
+                    field_value = int(field_value)
+                defaults[field] = field_value
+            return defaults
+        except (KeyError, ValueError) as parse_error:
+            self.stdout.write(
+                self.style.WARNING(
+                    f'Ошибка парсинга в строке {row_id}: {parse_error}'
+                )
+            )
+            return None
+
+    def _save_row(
+        self,
+        model: type[Any],
+        row: dict[str, Any],
+        defaults: dict[str, Any],
+    ) -> bool:
+        """Сохраняет строку в БД. Возвращает True при успехе, иначе False."""
+        row_id = row.get('id', '?')
+        try:
+            obj, _ = model.objects.update_or_create(
+                id=row['id'],
+                defaults=defaults
+            )
+            if 'pub_date' in defaults:
+                model.objects.filter(pk=obj.pk).update(
+                    pub_date=defaults['pub_date']
+                )
+            return True
+        except Exception as error:
+            self.stdout.write(
+                self.style.WARNING(
+                    f'Ошибка в строке {row_id}: {error}'
+                )
+            )
+        return False
+
     def _import_csv(
         self,
         file_path: Path,
         model: type[Any],
-        fields: list[str],
+        fields: tuple[str, ...],
     ) -> None:
         """Импортирует данные из CSV в указанную модель."""
         if not file_path.exists():
@@ -71,44 +129,14 @@ class Command(BaseCommand):
             return
 
         count = 0
-        with open(file_path, encoding='utf-8') as f:
-            reader = csv.DictReader(f)
+        with open(file_path, encoding='utf-8') as csv_file:
+            reader = csv.DictReader(csv_file)
             for row in reader:
-                try:
-                    defaults = {}
-                    for field in fields:
-                        if field == 'id':
-                            continue
-                        csv_field = field
-                        if field in ('category_id', 'author_id'):
-                            csv_field = field.replace('_id', '')
-
-                        value = row[csv_field]
-                        if field in (
-                            'year', 'score', 'category_id',
-                            'title_id', 'author_id', 'review_id'
-                        ):
-                            value = int(value)
-                        defaults[field] = value
-
-                    obj, _ = model.objects.update_or_create(
-                        id=row['id'],
-                        defaults=defaults
-                    )
-                    if 'pub_date' in defaults:
-                        # auto_now_add игнорирует переданную дату при
-                        # создании — проставляем дату из csv явно
-                        model.objects.filter(pk=obj.pk).update(
-                            pub_date=defaults['pub_date']
-                        )
+                defaults = self._parse_row(row, fields)
+                if defaults is None:
+                    continue
+                if self._save_row(model, row, defaults):
                     count += 1
-
-                except Exception as e:
-                    self.stdout.write(
-                        self.style.WARNING(
-                            f'Ошибка в строке {row.get("id", "?")}: {e}'
-                        )
-                    )
 
         self.stdout.write(
             f'Импортировано {count} записей модели {model.__name__}'
@@ -122,8 +150,8 @@ class Command(BaseCommand):
 
         count = 0
         genre_title_relation = Title.genre.through
-        with open(file_path, encoding='utf-8') as f:
-            reader = csv.DictReader(f)
+        with open(file_path, encoding='utf-8') as csv_file:
+            reader = csv.DictReader(csv_file)
             for row in reader:
                 try:
                     genre_title_relation.objects.get_or_create(
@@ -132,9 +160,9 @@ class Command(BaseCommand):
                     )
                     count += 1
 
-                except Exception as e:
+                except Exception as error:
                     self.stdout.write(
-                        self.style.WARNING(f'Ошибка в M2M строке: {e}')
+                        self.style.WARNING(f'Ошибка в M2M строке: {error}')
                     )
 
         self.stdout.write(f'Связано {count} жанров с произведениями')
