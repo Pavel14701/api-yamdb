@@ -75,21 +75,30 @@ class Command(BaseCommand):
             reader = csv.DictReader(csv_file)
             for row in reader:
                 defaults = {}
-                for field in fields:
-                    if field == 'id':
-                        continue
-                    csv_field = field
-                    if field in {'category_id', 'author_id'}:
-                        csv_field = field.replace('_id', '')
-
-                    field_value = row[csv_field]
-                    if field in {
-                        'year', 'score', 'category_id',
-                        'title_id', 'author_id', 'review_id'
-                    }:
-                        field_value = int(field_value)
-                    defaults[field] = field_value
                 row_id = row.get('id', '?')
+                try:
+                    for field in fields:
+                        if field == 'id':
+                            continue
+                        csv_field = field
+                        if field in {'category_id', 'author_id'}:
+                            csv_field = field.replace('_id', '')
+
+                        field_value = row[csv_field]
+                        if field in {
+                            'year', 'score', 'category_id',
+                            'title_id', 'author_id', 'review_id'
+                        }:
+                            field_value = int(field_value)
+                        defaults[field] = field_value
+
+                except (KeyError, ValueError) as parse_error:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f'Ошибка парсинга в строке {row_id}: {parse_error}'
+                        )
+                    )
+                    continue
                 try:
 
                     obj, _ = model.objects.update_or_create(
