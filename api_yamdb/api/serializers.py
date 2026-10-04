@@ -13,30 +13,26 @@ from rest_framework.exceptions import NotFound, ValidationError
 from reviews.models import Category, Comment, Genre, Review, Title
 
 # Импорты пользователей
-from users.models import User
-from users.utils import hash_confirmation_code
+from users.codes import hash_confirmation_code
+from users.models import User, validate_username
 
 UserModel = get_user_model()
 
-FORBIDDEN_USERNAME = 'me'
-MSG_FORBIDDEN_USERNAME = 'Использовать имя "me" в качестве username запрещено.'
 MSG_WRONG_CONFIRMATION_CODE = 'Неверный код подтверждения.'
 
 
 class SignUpSerializer(serializers.Serializer[dict[str, Any]]):
-    """Сериализатор самостоятельной регистрации пользователя."""
+    """Сериализатор самостоятельной регистрации пользователя.
+
+    Валидация username (формат + запрет имени "me") подхватывается
+    из валидатора модели пользователя.
+    """
 
     email = serializers.EmailField(max_length=254)
-    username = serializers.RegexField(
-        regex=r'^[\w.@+-]+\Z',
+    username = serializers.CharField(
         max_length=150,
+        validators=(validate_username,),
     )
-
-    def validate_username(self, value: str) -> str:
-        """Запрещает зарезервированный username 'me'."""
-        if value.lower() == FORBIDDEN_USERNAME:
-            raise serializers.ValidationError(MSG_FORBIDDEN_USERNAME)
-        return value
 
     def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         """Проверяет занятость username и соответствие email."""

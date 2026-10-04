@@ -7,7 +7,6 @@ from django.core.mail import send_mail
 from rest_framework import viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.filters import SearchFilter
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -20,8 +19,8 @@ from api.serializers import (
     UserMeSerializer,
     UserSerializer,
 )
+from users.codes import generate_confirmation_code, hash_confirmation_code
 from users.models import User
-from users.utils import generate_confirmation_code, hash_confirmation_code
 
 DEFAULT_FROM_EMAIL = 'noreply@yamdb.fake'
 
@@ -74,13 +73,17 @@ def obtain_token(request: Request) -> Response:
     return Response({'token': str(token)}, status=HTTPStatus.OK)
 
 
-class UsersPagination(PageNumberPagination):
-    """Пагинация только для списка пользователей.
-
-    Настраивается локально, чтобы не влиять на другие ресурсы API.
-    """
-
-    page_size = 10
+def _get_auth_user(request: Request) -> Response | User:
+    """Возвращает User или Response с 401 для сужения типа request.user."""
+    user = request.user
+    if isinstance(user, AnonymousUser):
+        # Недостижимо: на экшенах стоит permission IsAuthenticated,
+        # но проверка нужна для сужения типа request.user до User.
+        return Response(
+            {'detail': 'Требуется аутентификация.'},
+            status=HTTPStatus.UNAUTHORIZED,
+        )
+    return user
 
 
 class UserViewSet(viewsets.ModelViewSet[User]):
@@ -98,7 +101,6 @@ class UserViewSet(viewsets.ModelViewSet[User]):
     filter_backends = (SearchFilter,)
     search_fields = ('username',)
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
-    pagination_class = UsersPagination
 
     @action(
         detail=False,
@@ -110,24 +112,19 @@ class UserViewSet(viewsets.ModelViewSet[User]):
 
         Любой авторизованный пользователь может посмотреть и
         изменить свои данные, кроме поля role — оно доступно
-        только для чтения.
+        только для чтения. PUT не предусмотрен (см. http_method_names).
         """
-        user = request.user
-        if isinstance(user, AnonymousUser):
-            # Недостижимо: на экшене стоит permission IsAuthenticated,
-            # но проверка нужна для сужения типа request.user до User.
-            return Response(
-                {'detail': 'Требуется аутентификация.'},
-                status=HTTPStatus.UNAUTHORIZED,
-            )
+        auth = _get_auth_user(request)
+        if isinstance(auth, Response):
+            return auth
         if request.method == 'PATCH':
             serializer = UserMeSerializer(
-                user,
+                auth,
                 data=request.data,
                 partial=True,
             )
             serializer.is_valid(raise_exception=True)
             serializer.save()
         else:
-            serializer = UserMeSerializer(user)
+            serializer = UserMeSerializer(auth)
         return Response(serializer.data, status=HTTPStatus.OK)

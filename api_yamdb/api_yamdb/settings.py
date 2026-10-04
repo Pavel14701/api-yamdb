@@ -112,11 +112,14 @@ STATIC_URL = '/static/'
 
 STATICFILES_DIRS = ((BASE_DIR / 'static/'),)
 
-# Настройки DRF: аутентификация по JWT-токену.
+# Настройки DRF: аутентификация по JWT-токену, пагинация списков.
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    'DEFAULT_PAGINATION_CLASS':
+        'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
 }
 
 # Настройки почты для отладки: письма печатаются в консоль,

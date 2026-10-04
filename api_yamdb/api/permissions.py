@@ -6,6 +6,8 @@ from rest_framework import permissions
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
+from users.models import User
+
 
 class IsAdmin(permissions.BasePermission):
     """Разрешает доступ только администраторам.
@@ -18,7 +20,7 @@ class IsAdmin(permissions.BasePermission):
         """Проверяет, авторизован ли пользователь и является ли админом."""
         user = request.user
         return user.is_authenticated and (
-            user.role == 'admin' or user.is_superuser
+            user.role == User.ADMIN or user.is_superuser
         )
 
 
@@ -31,9 +33,8 @@ class IsAdminOrReadOnly(permissions.BasePermission):
 
     def has_permission(self, request: Request, view: APIView) -> bool:
         """Разрешает небезопасные методы только администратору."""
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        return IsAdmin().has_permission(request, view)
+        return request.method in permissions.SAFE_METHODS or IsAdmin(
+        ).has_permission(request, view)
 
 
 class IsAuthorModeratorAdminOrReadOnly(permissions.BasePermission):
@@ -53,15 +54,15 @@ class IsAuthorModeratorAdminOrReadOnly(permissions.BasePermission):
         self,
         request: Request,
         view: APIView,
-        obj: Any,
+        review_or_comment: Any,
     ) -> bool:
         """Проверяет права на конкретный объект (отзыв или комментарий)."""
         if request.method in permissions.SAFE_METHODS:
             return True
         user = request.user
         return user.is_authenticated and (
-            obj.author == user
-            or user.role == 'moderator'
-            or user.role == 'admin'
+            review_or_comment.author == user
+            or user.role == User.MODERATOR
+            or user.role == User.ADMIN
             or user.is_superuser
         )
