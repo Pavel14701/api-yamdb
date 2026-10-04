@@ -1,20 +1,42 @@
 """Модели приложения reviews."""
 
+from datetime import datetime
+
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
+from reviews.constants import (
+    NAME_MAX_LENGTH,
+    SCORE_MAX,
+    SCORE_MIN,
+    SLUG_MAX_LENGTH,
+)
 from users.models import User
+
+
+def current_year():
+    """Возвращает текущий год."""
+    return datetime.now().year
+
+
+def validate_year(value):
+    """Валидатор: год не должен быть больше текущего."""
+    if value > current_year():
+        raise ValidationError(
+            f'Год выпуска не может быть больше текущего ({current_year()}).',
+            code='invalid_year',
+        )
 
 
 class BaseNameSlugModel(models.Model):
     """Абстрактная базовая модель с полями name и slug."""
-
     name = models.CharField(
-        max_length=256,
+        max_length=NAME_MAX_LENGTH,
         verbose_name='Название',
     )
     slug = models.SlugField(
-        max_length=50,
+        max_length=SLUG_MAX_LENGTH,
         unique=True,
         verbose_name='Slug',
     )
@@ -31,7 +53,6 @@ class BaseNameSlugModel(models.Model):
 
 class Category(BaseNameSlugModel):
     """Модель категории произведений."""
-
     class Meta(BaseNameSlugModel.Meta):
         """Настройки метаданных модели Category."""
         verbose_name = 'Категория'
@@ -40,7 +61,6 @@ class Category(BaseNameSlugModel):
 
 class Genre(BaseNameSlugModel):
     """Модель жанра произведения."""
-
     class Meta(BaseNameSlugModel.Meta):
         """Настройки метаданных модели Genre."""
         verbose_name = 'Жанр'
@@ -49,17 +69,17 @@ class Genre(BaseNameSlugModel):
 
 class Title(models.Model):
     """Модель произведения (фильм, книга, песня и т.д.)."""
-
     name = models.CharField(
-        max_length=256,
+        max_length=NAME_MAX_LENGTH,
         verbose_name='Название произведения',
     )
     year = models.IntegerField(
+        validators=[validate_year],
+        db_index=True,
         verbose_name='Год выпуска',
     )
     description = models.TextField(
         blank=True,
-        null=True,
         verbose_name='Описание',
     )
     category = models.ForeignKey(
@@ -87,8 +107,6 @@ class Title(models.Model):
 
 
 class Review(models.Model):
-    """Модель отзыва на произведение."""
-
     title = models.ForeignKey(
         Title,
         on_delete=models.CASCADE,
@@ -104,8 +122,8 @@ class Review(models.Model):
     )
     score = models.PositiveSmallIntegerField(
         validators=[
-            MinValueValidator(1, 'Оценка не может быть ниже 1'),
-            MaxValueValidator(10, 'Оценка не может быть выше 10')
+            MinValueValidator(SCORE_MIN, 'Оценка не может быть ниже 1'),
+            MaxValueValidator(SCORE_MAX, 'Оценка не может быть выше 10')
         ],
         verbose_name='Оценка произведения',
     )
@@ -116,8 +134,6 @@ class Review(models.Model):
     )
 
     class Meta:
-        """Настройки отображения модели."""
-
         verbose_name = 'Отзыв'
         verbose_name_plural = 'Отзывы'
         ordering = ('-pub_date',)
@@ -129,13 +145,10 @@ class Review(models.Model):
         ]
 
     def __str__(self) -> str:
-        """Возвращает краткое описание отзыва."""
         return f'Отзыв от {self.author} на {self.title}'
 
 
 class Comment(models.Model):
-    """Модель комментария к отзыву."""
-
     review = models.ForeignKey(
         Review,
         on_delete=models.CASCADE,
@@ -156,12 +169,9 @@ class Comment(models.Model):
     )
 
     class Meta:
-        """Настройки отображения модели."""
-
         verbose_name = 'Комментарий'
         verbose_name_plural = 'Комментарии'
         ordering = ('-pub_date',)
 
     def __str__(self) -> str:
-        """Возвращает краткое описание комментария."""
         return f'Комментарий от {self.author} к отзыву {self.review.id}'

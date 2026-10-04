@@ -3,16 +3,14 @@
 Контент: произведения, категории, жанры, отзывы и комментарии.
 """
 
-from typing import Any
+from typing import Any, Mapping
 
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework.exceptions import NotFound, ValidationError
 
-# Импорты моделей контента (новые)
 from reviews.models import Category, Comment, Genre, Review, Title
 
-# Импорты пользователей
 from users.models import User
 from users.utils import hash_confirmation_code
 
@@ -25,20 +23,19 @@ MSG_WRONG_CONFIRMATION_CODE = 'Неверный код подтверждени�
 
 class SignUpSerializer(serializers.Serializer[dict[str, Any]]):
     """Сериализатор самостоятельной регистрации пользователя."""
-
     email = serializers.EmailField(max_length=254)
     username = serializers.RegexField(
         regex=r'^[\w.@+-]+\Z',
         max_length=150,
     )
 
-    def validate_username(self, value: str) -> str:
+    def validate_username(self, username: str) -> str:
         """Запрещает зарезервированный username 'me'."""
-        if value.lower() == FORBIDDEN_USERNAME:
+        if username.lower() == FORBIDDEN_USERNAME:
             raise serializers.ValidationError(MSG_FORBIDDEN_USERNAME)
-        return value
+        return username
 
-    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
+    def validate(self, data: Mapping[str, Any]) -> dict[str, Any]:
         """Проверяет занятость username и соответствие email."""
         username = data['username']
         email = data['email']
@@ -48,7 +45,8 @@ class SignUpSerializer(serializers.Serializer[dict[str, Any]]):
                 raise serializers.ValidationError(
                     {'username': 'Такой username уже занят.'}
                 )
-        elif User.objects.filter(email=email).exists():
+            return data
+        if User.objects.filter(email=email).exists():
             raise serializers.ValidationError(
                 {'email': 'Такой email уже зарегистрирован.'}
             )
@@ -57,11 +55,10 @@ class SignUpSerializer(serializers.Serializer[dict[str, Any]]):
 
 class GetTokenSerializer(serializers.Serializer[dict[str, Any]]):
     """Сериализатор получения JWT-токена по коду подтверждения."""
-
     username = serializers.CharField(max_length=150)
     confirmation_code = serializers.CharField(max_length=128, write_only=True)
 
-    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
+    def validate(self, data: Mapping[str, Any]) -> dict[str, Any]:
         """Проверяет username и код подтверждения."""
         try:
             user = UserModel.objects.get(username=data['username'])
@@ -76,10 +73,9 @@ class GetTokenSerializer(serializers.Serializer[dict[str, Any]]):
 
 class UserSerializer(serializers.ModelSerializer[User]):
     """Сериализатор пользователей для админских эндпоинтов /users/."""
-
+    
     class Meta:
         """Настройки сериализатора User."""
-
         model = User
         fields = (
             'username',
@@ -93,16 +89,14 @@ class UserSerializer(serializers.ModelSerializer[User]):
 
 class UserMeSerializer(UserSerializer):
     """Сериализатор эндпоинта /users/me/."""
-
+    
     class Meta(UserSerializer.Meta):
         """Настройки сериализатора /users/me/ (role только для чтения)."""
-
         read_only_fields = ('role',)
 
 
 class ReviewSerializer(serializers.ModelSerializer[Review]):
     """Сериализатор для работы с моделью отзывов (Review)."""
-
     author = serializers.SlugRelatedField[User](
         slug_field='username',
         read_only=True,
@@ -110,12 +104,11 @@ class ReviewSerializer(serializers.ModelSerializer[Review]):
 
     class Meta:
         """Настройки сериализатора Review."""
-
         model = Review
         fields = ('id', 'text', 'author', 'score', 'pub_date')
         read_only_fields = ('author', 'pub_date')
 
-    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
+    def validate(self, data: Mapping[str, Any]) -> dict[str, Any]:
         """Проверка уникальности отзыва."""
         request = self.context.get('request')
         view = self.context.get('view')
@@ -133,7 +126,6 @@ class ReviewSerializer(serializers.ModelSerializer[Review]):
 
 class CommentSerializer(serializers.ModelSerializer[Comment]):
     """Сериализатор для работы с моделью комментариев (Comment)."""
-
     author = serializers.SlugRelatedField[User](
         slug_field='username',
         read_only=True,
@@ -141,7 +133,6 @@ class CommentSerializer(serializers.ModelSerializer[Comment]):
 
     class Meta:
         """Настройки сериализатора Comment."""
-
         model = Comment
         fields = ('id', 'text', 'author', 'pub_date')
         read_only_fields = ('author', 'pub_date')
@@ -149,40 +140,30 @@ class CommentSerializer(serializers.ModelSerializer[Comment]):
 
 class CategorySerializer(serializers.ModelSerializer[Category]):
     """Сериализатор для работы с моделью категорий (Category)."""
-
+    
     class Meta:
         """Настройки сериализатора Category."""
-
         model = Category
         fields = ('name', 'slug')
-        extra_kwargs = {
-            'slug': {'required': True}
-        }
 
 
 class GenreSerializer(serializers.ModelSerializer[Genre]):
     """Сериализатор для работы с моделью жанров (Genre)."""
-
+    
     class Meta:
         """Настройки сериализатора Genre."""
-
         model = Genre
         fields = ('name', 'slug')
-        extra_kwargs = {
-            'slug': {'required': True}
-        }
 
 
 class TitleReadSerializer(serializers.ModelSerializer[Title]):
     """Сериализатор для чтения произведений (GET-запросы)."""
-
     genre = GenreSerializer(many=True, read_only=True)
     category = CategorySerializer(read_only=True)
     rating = serializers.IntegerField(read_only=True)
 
     class Meta:
         """Настройки сериализатора чтения Title."""
-
         model = Title
         fields = (
             'id',
@@ -197,7 +178,6 @@ class TitleReadSerializer(serializers.ModelSerializer[Title]):
 
 class TitleWriteSerializer(serializers.ModelSerializer[Title]):
     """Сериализатор для создания/обновления произведений (POST, PATCH)."""
-
     genre = serializers.SlugRelatedField[Genre](
         many=True,
         slug_field='slug',
@@ -210,6 +190,5 @@ class TitleWriteSerializer(serializers.ModelSerializer[Title]):
 
     class Meta:
         """Настройки сериализатора записи Title."""
-
         model = Title
         fields = ('id', 'name', 'year', 'description', 'genre', 'category')
