@@ -41,6 +41,23 @@ DEV_INSECURE_SECRET_KEY = 'django-insecure-dev-only-key-yamdb'
 # «вручную придуманные» ключи — угаданный ключ позволяет подделывать
 # подписанные им JWT-токены (замечание ревью).
 MIN_SECRET_KEY_LENGTH: Final = 50
+# Эвристика «набранного руками» ключа: маркеры проверяются по
+# нормализованному виду (нижний регистр, только буквы и цифры),
+# разнообразие — по числу РАЗЛИЧНЫХ символов: случайный ключ из
+# secrets.token_urlsafe(64) даёт 30+ разных символов, фраза,
+# придуманная человеком, — обычно меньше (замечание ревью:
+# длина сама по себе не делает ключ непредсказуемым).
+PREDICTABLE_SECRET_MARKERS = (
+    'djangoinsecure',
+    'secret',
+    'password',
+    'passwd',
+    'changeme',
+    'placeholder',
+    'qwerty',
+    'example',
+)
+MIN_SECRET_ALPHABET: Final = 30
 SECRET_KEY = os.environ.get('SECRET_KEY', DEV_INSECURE_SECRET_KEY)
 # Дефолт False: незаданный DEBUG не должен включать отладку.
 DEBUG = _env_bool('DEBUG', False)
@@ -178,6 +195,20 @@ SIMPLE_JWT = {
 # чтения окружения; тесты валидатор не вызывают (им прод не нужен).
 
 
+def _is_predictable_secret(key: str) -> bool:
+    """Эвристика «набранного руками» (угадываемого) ключа.
+
+    True, если в нормализованном ключе есть известный маркер
+    или разнообразие символов ниже MIN_SECRET_ALPHABET — случайный
+    ключ из secrets.token_urlsafe(64) не попадает ни под один из
+    признаков (замечание ревью: проверки только длины мало).
+    """
+    normalized = ''.join(ch for ch in key.lower() if ch.isalnum())
+    if any(marker in normalized for marker in PREDICTABLE_SECRET_MARKERS):
+        return True
+    return len(set(key)) < MIN_SECRET_ALPHABET
+
+
 def validate_environment() -> None:
     """Проверяет безопасность настроек при DEBUG=False.
 
@@ -200,6 +231,13 @@ def validate_environment() -> None:
         raise ImproperlyConfigured(
             f'SECRET_KEY короче {MIN_SECRET_KEY_LENGTH} символов '
             'запрещён при DEBUG=False: слабый ключ позволяет '
+            'подделывать JWT. Сгенерируйте, например: '
+            'python -c "import secrets; print(secrets.token_urlsafe(64))".'
+        )
+    if _is_predictable_secret(SECRET_KEY):
+        raise ImproperlyConfigured(
+            'SECRET_KEY при DEBUG=False должен быть криптографически '
+            'случайным: угадываемый (набранный руками) ключ позволяет '
             'подделывать JWT. Сгенерируйте, например: '
             'python -c "import secrets; print(secrets.token_urlsafe(64))".'
         )

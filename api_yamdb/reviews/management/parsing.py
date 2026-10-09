@@ -47,9 +47,12 @@ def parse_row(
         field_value = row[csv_field]
         if field in NUMERIC_FIELDS:
             # try/except намеренно узкий — только приведение к int.
+            # TypeError тоже ожидаем: csv.DictReader отдаёт None для
+            # отсутствующей ячейки, и int(None) — это TypeError,
+            # а не ValueError (замечание ревью).
             try:
                 field_value = int(field_value)
-            except ValueError as parse_error:
+            except (ValueError, TypeError) as parse_error:
                 raise FieldParseError(
                     row_id, str(parse_error),
                 ) from parse_error

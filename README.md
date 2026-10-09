@@ -20,7 +20,7 @@ YaMDb собирает отзывы пользователей на произв
 
 **Качество кода и тесты:**
 
-- [pytest 8.3](https://docs.pytest.org/) + [pytest-django](https://pytest-django.readthedocs.io/) — 110 тестов (курсовые + юнит-тесты сервисного слоя и настроек)
+- [pytest 8.3](https://docs.pytest.org/) + [pytest-django](https://pytest-django.readthedocs.io/) — 119 тестов (курсовые + юнит-тесты сервисного слоя, настроек и импорта CSV)
 - [ruff](https://docs.astral.sh/ruff/) — основной линтер (B, C4, D/pydocstyle, E, F, I, N, SIM, UP, W)
 - [flake8 7.1](https://flake8.pycqa.org/) — линтер (PEP 8, `max-complexity=10`)
 - [mypy](https://mypy-lang.org/) — строгая типизация (`strict`, плагины django-stubs / djangorestframework-stubs)
@@ -136,7 +136,7 @@ python manage.py runserver
 ## Тесты и CI
 
 ```bash
-pytest            # 110 тестов
+pytest            # 119 тестов
 ruff check .      # линтер
 flake8            # линтер (PEP8)
 mypy              # строгая типизация

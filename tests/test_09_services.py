@@ -200,6 +200,16 @@ class Test09ParseRow:
         with pytest.raises(FieldParseError):
             parse_row({'id': '1', 'year': 'две тыщи'}, ('id', 'year'))
 
+    def test_missing_numeric_cell_raises_field_parse_error(self):
+        """Пустая ячейка числовой колонки (None) — FieldParseError.
+
+        csv.DictReader отдаёт None вместо строки для отсутствующей
+        ячейки; int(None) — TypeError, он тоже должен превращаться
+        в перехватываемый CsvImportError, а не ронять импорт.
+        """
+        with pytest.raises(FieldParseError):
+            parse_row({'id': '1', 'year': None}, ('id', 'year'))
+
 
 @pytest.mark.django_db
 class Test09TitleRating:

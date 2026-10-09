@@ -33,8 +33,12 @@ class Test10EnvValidator:
     # Безопасные значения для НЕцелевого параметра в каждом кейсе:
     # без изоляции небезопасные значения маскируют друг друга
     # (проверка упадёт на первом же, и кейс не проверит своё).
+    # Безопасный ключ — «случайно выглядящий»: проходит и проверку
+    # длины, и эвристику предсказуемости.
     SAFE_ENV = {
-        'SECRET_KEY': 'x' * 50,
+        'SECRET_KEY': (
+            'Xk9mQ2vT7wZ5yR8nJ4pL6sD1fG0hC9eU2iO5tY3rA7bN4qM8zW6xE1'
+        ),
         'ALLOWED_HOSTS': ('api.yamdb.example',),
         'DEFAULT_FROM_EMAIL': 'prod@yamdb.example',
     }
@@ -46,6 +50,8 @@ class Test10EnvValidator:
             ('SECRET_KEY', ''),
             ('SECRET_KEY', '   '),
             ('SECRET_KEY', 'too-short-key'),
+            ('SECRET_KEY', 'q' * 60),
+            ('SECRET_KEY', 'my very predictable secret key for the yamdb api 2024'),
             ('ALLOWED_HOSTS', ('*',)),
             ('ALLOWED_HOSTS', ()),
             ('DEFAULT_FROM_EMAIL', 'noreply@yamdb.fake'),
@@ -55,6 +61,8 @@ class Test10EnvValidator:
             'empty-secret-key',
             'blank-secret-key',
             'weak-secret-key',
+            'low-entropy-secret-key',
+            'predictable-secret-key',
             'wildcard-hosts',
             'empty-hosts',
             'default-from-email',
