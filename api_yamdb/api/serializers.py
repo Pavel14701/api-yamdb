@@ -111,17 +111,27 @@ class GetTokenSerializer(serializers.Serializer[dict[str, Any]]):
 
     def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         """Проверяет username и код подтверждения."""
+        user = self._get_user(data['username'])
+        self._verify_code(user, data['confirmation_code'])
+        data['user'] = user
+        return data
+
+    @staticmethod
+    def _get_user(username: str) -> User:
+        """Пользователь по username или 404 (контракт документации)."""
         try:
-            user = User.objects.get(username=data['username'])
+            return User.objects.get(username=username)
         except User.DoesNotExist:
             raise NotFound('Пользователь не найден.') from None
-        code_hash = hash_confirmation_code(data['confirmation_code'])
+
+    @staticmethod
+    def _verify_code(user: User, code: str) -> None:
+        """Код подтверждения совпадает с хэшем в БД."""
+        code_hash = hash_confirmation_code(code)
         # compare_digest вместо != : сравнение за постоянное время,
         # без утечки числа совпавших символов через тайминги.
         if not hmac.compare_digest(user.confirmation_code, code_hash):
             raise serializers.ValidationError(MSG_WRONG_CONFIRMATION_CODE)
-        data['user'] = user
-        return data
 
 
 class UserSerializer(serializers.ModelSerializer['User']):
