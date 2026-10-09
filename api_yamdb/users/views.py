@@ -1,7 +1,8 @@
 """Представления API: регистрация, выдача токена, пользователи.
 
 Вьюхи пользователей живут в своём доменном приложении users;
-общие для всех эндпоинтов сериализаторы и permissions — в api/.
+сериализаторы домена — в users/serializers.py, общие permissions
+— в api/.
 """
 
 from http import HTTPStatus
@@ -16,14 +17,14 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import AccessToken
 
 from api.permissions import IsAdmin
-from api.serializers import (
+from users.exceptions import EmailDeliveryError
+from users.models import User
+from users.serializers import (
     GetTokenSerializer,
     SignUpSerializer,
     UserMeSerializer,
     UserSerializer,
 )
-from users.exceptions import EmailDeliveryError
-from users.models import User
 from users.services import signup_user
 
 
