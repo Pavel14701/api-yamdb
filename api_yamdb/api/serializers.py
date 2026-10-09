@@ -7,6 +7,7 @@ import hmac
 from typing import TYPE_CHECKING, Any
 
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from rest_framework import serializers
 from rest_framework.exceptions import NotFound, ValidationError
 
@@ -35,6 +36,8 @@ else:
     User = get_user_model()
 
 MSG_WRONG_CONFIRMATION_CODE = 'Неверный код подтверждения.'
+MSG_USERNAME_TAKEN = 'Такой username уже занят.'
+MSG_EMAIL_TAKEN = 'Такой email уже зарегистрирован.'
 
 
 class SignUpSerializer(serializers.Serializer[dict[str, Any]]):
@@ -52,22 +55,49 @@ class SignUpSerializer(serializers.Serializer[dict[str, Any]]):
 
     def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         """Проверяет занятость username и соответствие email."""
-        username = data['username']
-        email = data['email']
-        # Один запрос вместо exists() + get(): пользователь с таким
-        # username есть — сверяем email, нет — проверяем занятость email.
-        user = User.objects.filter(username=username).first()
-        if user is not None:
-            if user.email != email:
-                raise serializers.ValidationError(
-                    {'username': 'Такой username уже занят.'}
-                )
-            return data
-        if User.objects.filter(email=email).exists():
-            raise serializers.ValidationError(
-                {'email': 'Такой email уже зарегистрирован.'}
-            )
+        username, email = data['username'], data['email']
+        # Один запрос на обе проверки: совпадение по username ИЛИ email.
+        # Максимум две строки — оба поля уникальны и проиндексированы.
+        matches = list(
+            User.objects.filter(Q(username=username) | Q(email=email))
+            .only('username', 'email')
+        )
+        self._validate_username_free(matches, username, email)
+        self._validate_email_free(matches, username, email)
         return data
+
+    @staticmethod
+    def _validate_username_free(
+        matches: list[User], username: str, email: str
+    ) -> None:
+        """Username свободен или занят этим же email (повторный signup).
+
+        Повторная регистрация существующего аккаунта (регенерация кода
+        подтверждения) — валидна; чужой username с другим email —
+        ошибка.
+        """
+        for user in matches:
+            if user.username != username:
+                continue
+            if user.email == email:
+                return
+            raise serializers.ValidationError(
+                {'username': MSG_USERNAME_TAKEN}
+            )
+
+    @staticmethod
+    def _validate_email_free(
+        matches: list[User], username: str, email: str
+    ) -> None:
+        """Email не должен быть занят ДРУГИМ username.
+
+        Строка с этим же username — это повторный signup, её пропускаем.
+        """
+        if any(
+            user.email == email and user.username != username
+            for user in matches
+        ):
+            raise serializers.ValidationError({'email': MSG_EMAIL_TAKEN})
 
 
 class GetTokenSerializer(serializers.Serializer[dict[str, Any]]):
