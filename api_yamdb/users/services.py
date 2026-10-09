@@ -35,7 +35,6 @@ MSG_USERNAME_TAKEN = 'Такой username уже занят.'
 MSG_EMAIL_TAKEN = 'Такой email уже зарегистрирован.'
 
 
-@transaction.atomic
 def signup_user(username: str, email: str) -> User:
     """Создаёт пользователя и доставляет ему код подтверждения.
 
@@ -50,41 +49,66 @@ def signup_user(username: str, email: str) -> User:
     - гонка уникального email у РАЗНЫХ username доходит до нас
       IntegrityError'ом и превращается в ValidationError;
     - select_for_update сериализует повторные регистрации одного
-      аккаунта: письмо отправляется под блокировкой строки, поэтому
-      хэш в БД и доставленный код всегда согласованы — параллельный
-      запрос не может перезаписать хэш между сохранением и доставкой
-      (замечание ревью).
+      аккаунта: обновление хэша выполняется под блокировкой строки.
 
-    Письмо отправляется ВНУТРИ транзакции: раньше доставку выносили
-    наружу («SMTP держит блокировки БД»), но вне блокировки гонка
-    портила код подтверждения — корректность важнее, а цена блокировки
-    ограничена тремя ретраями. Сбой доставки откатывает и создание
-    пользователя: повторный signup создаст аккаунт заново и пришлёт
-    свежий код.
+    Письмо отправляется ПОСЛЕ коммита транзакции (замечание ревью:
+    код, отправленный до коммита, при откате становится «отозванным»
+    — получатель держит код, которого нет в БД). Схема двухфазная:
+    фаза 1 (atomic) — get_or_create, блокировка строки, обновление
+    хэша, коммит; фаза 2 — хэш перечитывается из БД, и если
+    параллельный signup уже перезаписал код, наш экземпляр отозван
+    и письмо не отправляется (свой код доставит параллельный запрос).
+    Осознанные компромиссы:
+    - между перечитыванием и SMTP остаётся микрогонка, но её окно —
+      миллисекунды, а не секунды SMTP-ретраев (отправка внутри
+      транзакции, как раньше, эту микрогонку не устраняет, зато
+      оставляет проблему отозванных кодов);
+    - сбой доставки больше не откатывает создание аккаунта — он уже
+      закоммичен: повторный signup регенерирует код и повторяет
+      доставку (как и было до переноса письма под транзакцию).
     """
-    try:
-        User.objects.get_or_create(
-            username=username,
-            defaults={'email': email},
+    with transaction.atomic():
+        try:
+            User.objects.get_or_create(
+                username=username,
+                defaults={'email': email},
+            )
+        except IntegrityError:
+            # Сюда попадает только гонка email-уникальности:
+            # конфликт username get_or_create разрешает
+            # внутренним повторным get.
+            raise ValidationError({'email': MSG_EMAIL_TAKEN}) from None
+        # Блокировка строки: конкурирующие регистрации одного
+        # аккаунта выполняют блок строго последовательно.
+        user = User.objects.select_for_update().get(username=username)
+        if user.email != email:
+            # Аккаунт создан между проверкой сериализатора и текущим
+            # запросом (параллельный signup или админ) с другим
+            # email — чужой аккаунт не используем и код на чужой
+            # адрес не шлём.
+            raise ValidationError({'username': MSG_USERNAME_TAKEN})
+        code = generate_confirmation_code()
+        user.confirmation_code = hash_confirmation_code(code)
+        # Точечный UPDATE: не перезаписать поля, изменённые админом.
+        user.save(update_fields=('confirmation_code',))
+        committed_hash = user.confirmation_code
+    # Фаза 2 — после коммита: хэш мог быть перезаписан параллельной
+    # регистрацией между нашим коммитом и перечитыванием.
+    if _stored_confirmation_hash(user.pk) != committed_hash:
+        logger.info(
+            'Код для %s перезаписан параллельной регистрацией, '
+            'письмо не отправляется.',
+            user.email,
         )
-    except IntegrityError:
-        # Сюда попадает только гонка email-уникальности: конфликт
-        # username get_or_create разрешает внутренним повторным get.
-        raise ValidationError({'email': MSG_EMAIL_TAKEN}) from None
-    # Блокировка строки: конкурирующие регистрации одного аккаунта
-    # выполняют блок ниже строго последовательно.
-    user = User.objects.select_for_update().get(username=username)
-    if user.email != email:
-        # Аккаунт создан между проверкой сериализатора и текущим
-        # запросом (параллельный signup или админ) с другим email —
-        # чужой аккаунт не используем и код на чужой адрес не шлём.
-        raise ValidationError({'username': MSG_USERNAME_TAKEN})
-    code = generate_confirmation_code()
-    user.confirmation_code = hash_confirmation_code(code)
-    # Точечный UPDATE: не перезаписать поля, изменённые админом.
-    user.save(update_fields=('confirmation_code',))
+        return user
     send_confirmation_code(user, code)
     return user
+
+
+def _stored_confirmation_hash(user_pk: int) -> str:
+    """Актуальный хэш кода из БД (перечитывание после коммита)."""
+    fresh = User.objects.only('confirmation_code').get(pk=user_pk)
+    return fresh.confirmation_code
 
 
 def send_confirmation_code(user: User, code: str) -> None:

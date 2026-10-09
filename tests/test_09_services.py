@@ -84,21 +84,52 @@ class Test09SignupService:
             'Сбой записи кода должен откатывать создание пользователя.'
         )
 
-    def test_code_is_sent_inside_atomic_block(self):
-        """Письмо уходит внутри транзакции: хэш и код согласованы."""
-        seen: dict[str, bool] = {}
+    @pytest.mark.django_db(transaction=True)
+    def test_code_is_sent_after_commit(self):
+        """Письмо уходит ПОСЛЕ коммита: хэш уже виден всем транзакциям.
+
+        Отправка до коммита при откате оставляла бы у получателя
+        «отозванный» код — его нет в БД (замечание ревью).
+        TransactionTestCase: под обычным TestCase тест целиком живёт
+        в atomic-обёртке, и выход из внутреннего atomic — лишь
+        savepoint, коммит не проверить.
+        """
+        seen: dict[str, object] = {}
 
         def probe(email, code):
             seen['in_atomic'] = db_transaction.get_connection().in_atomic_block
+            stored = User.objects.get(username=self.USERNAME)
+            seen['stored_hash'] = stored.confirmation_code
+            seen['expected_hash'] = hash_confirmation_code(code)
 
         with patch('users.services._send_code_email', side_effect=probe):
             signup_user(self.USERNAME, self.EMAIL)
 
-        assert seen['in_atomic'], (
-            'Доставка кода должна выполняться под блокировкой строки '
-            'внутри atomic — иначе параллельный signup перезапишет хэш '
-            'до доставки письма.'
+        assert seen['in_atomic'] is False, (
+            'Доставка кода должна выполняться после выхода из '
+            'atomic-блока — иначе при откате транзакции получатель '
+            'останется с кодом, которого нет в БД.'
         )
+        assert seen['stored_hash'] == seen['expected_hash'], (
+            'К моменту доставки хэш отправляемого кода должен быть '
+            'уже закоммичен.'
+        )
+
+    def test_superseded_code_not_sent(self):
+        """Перезаписанный параллельным signup код не доставляется.
+
+        Между коммитом и доставкой другой запрос мог обновить хэш —
+        наш код отозван, письмо за него отправлять нельзя.
+        """
+        with patch(
+            'users.services._stored_confirmation_hash',
+            return_value='superseded-by-parallel-signup',
+        ), patch(
+            'users.services._send_code_email',
+        ) as send_mock:
+            signup_user(self.USERNAME, self.EMAIL)
+
+        send_mock.assert_not_called()
 
     def test_existing_user_with_other_email_rejected(self):
         """Аккаунт с другим email (гонка/админ) не используется."""
@@ -225,6 +256,12 @@ class Test09TitleRating:
         )
 
     def test_rating_is_average(self):
+        """Дробное среднее округляется, а не усекается.
+
+        Оценки 5 и 8 дают среднее 6.5: корректная реализация
+        вернёт 7, усекающая (int()) — 6 (замечание ревью: среднее
+        6 из оценок 5 и 7 не различает trunc и round).
+        """
         title = self._make_title()
         authors = [
             User.objects.create_user(username=f'r{i}', email=f'r{i}@x.io')
@@ -235,12 +272,13 @@ class Test09TitleRating:
                 title=title,
                 text=f'Отзыв {i}',
                 author=author,
-                score=5 + i * 2,
+                score=5 + i * 3,
             )
 
         rated = Title.objects.with_rating().get(pk=title.pk)
-        assert rated.rating == 6, (
-            'Рейтинг должен быть округлённым средним score отзывов.'
+        assert rated.rating == 7, (
+            'Рейтинг должен быть округлённым средним score отзывов '
+            '(среднее 5 и 8 = 6.5 округляется до 7, а не усекается до 6).'
         )
 
     def test_rating_is_none_without_reviews(self):

@@ -41,12 +41,17 @@ DEV_INSECURE_SECRET_KEY = 'django-insecure-dev-only-key-yamdb'
 # «вручную придуманные» ключи — угаданный ключ позволяет подделывать
 # подписанные им JWT-токены (замечание ревью).
 MIN_SECRET_KEY_LENGTH: Final = 50
-# Эвристика «набранного руками» ключа: маркеры проверяются по
-# нормализованному виду (нижний регистр, только буквы и цифры),
-# разнообразие — по числу РАЗЛИЧНЫХ символов: случайный ключ из
-# secrets.token_urlsafe(64) даёт 30+ разных символов, фраза,
-# придуманная человеком, — обычно меньше (замечание ревью:
-# длина сама по себе не делает ключ непредсказуемым).
+# Эвристика «набранного руками» (угадываемого) ключа. Офлайн-проверка
+# одной строки на непредсказуемость в принципе сводится к детекторам
+# известных слабых структур: энтропийные метрики не работают — частотная
+# энтропия и min-entropy (len * log2(|алфавит|)) МАКСИМАЛЬНЫ у
+# перечисления алфавита, а сжатие ловит только повторы (эксперимент:
+# deflate-сжимаемость ключа-алфавита 1.031 против 1.023 у случайного
+# токена — «случайнее» случайного). Гарантию даёт только генерация
+# CSPRNG — сообщение об ошибке подсказывает команду.
+# Маркеры проверяются по нормализованному виду (нижний регистр,
+# только буквы и цифры): дев-значения, словарные слова и ряды
+# клавиатуры (qwerty/asdfgh/zxcvbn, йцукен/фыва).
 PREDICTABLE_SECRET_MARKERS = (
     'djangoinsecure',
     'secret',
@@ -55,9 +60,18 @@ PREDICTABLE_SECRET_MARKERS = (
     'changeme',
     'placeholder',
     'qwerty',
+    'asdfgh',
+    'zxcvbn',
+    'йцукен',
+    'фыва',
     'example',
 )
-MIN_SECRET_ALPHABET: Final = 30
+# Минимальная длина монотонного прогона (соседние кодовые точки):
+# перечисление алфавита 'ABC...XYZ012...' даёт 30+ разных символов
+# и не сжимается, но элементарно угадывается (замечание ревью).
+MIN_MONOTONE_RUN: Final = 6
+# Максимальный период повторяющегося блока: 'q' * 60, 'ab12' * 15...
+MAX_SECRET_PERIOD: Final = 12
 SECRET_KEY = os.environ.get('SECRET_KEY', DEV_INSECURE_SECRET_KEY)
 # Дефолт False: незаданный DEBUG не должен включать отладку.
 DEBUG = _env_bool('DEBUG', False)
@@ -195,18 +209,44 @@ SIMPLE_JWT = {
 # чтения окружения; тесты валидатор не вызывают (им прод не нужен).
 
 
+def _has_monotone_run(chars: str, min_run: int) -> bool:
+    """True, если есть прогон из min_run символов с шагом кода ±1."""
+    run = 1
+    for prev, cur in zip(chars, chars[1:], strict=False):
+        if abs(ord(cur) - ord(prev)) == 1:
+            run += 1
+            if run >= min_run:
+                return True
+        else:
+            run = 1
+    return False
+
+
+def _is_periodic(chars: str, max_period: int) -> bool:
+    """True, если строка целиком — повтор блока с периодом <= max_period."""
+    return any(
+        len(chars) >= 2 * period
+        and all(ch == chars[i % period] for i, ch in enumerate(chars))
+        for period in range(1, max_period + 1)
+    )
+
+
 def _is_predictable_secret(key: str) -> bool:
     """Эвристика «набранного руками» (угадываемого) ключа.
 
-    True, если в нормализованном ключе есть известный маркер
-    или разнообразие символов ниже MIN_SECRET_ALPHABET — случайный
-    ключ из secrets.token_urlsafe(64) не попадает ни под один из
-    признаков (замечание ревью: проверки только длины мало).
+    True, если в нормализованном ключе есть известный маркер,
+    монотонный прогон символов (перечисление алфавита, '0123456789')
+    или периодический повтор блока ('q' * 60, 'ab12' * 15). Случайный
+    ключ из secrets.token_urlsafe(64) не подходит ни под один признак
+    (замечание ревью: проверки длины и разнообразия мало — ключ-алфавит
+    проходит и то, и другое).
     """
     normalized = ''.join(ch for ch in key.lower() if ch.isalnum())
     if any(marker in normalized for marker in PREDICTABLE_SECRET_MARKERS):
         return True
-    return len(set(key)) < MIN_SECRET_ALPHABET
+    if _has_monotone_run(normalized, MIN_MONOTONE_RUN):
+        return True
+    return _is_periodic(normalized, MAX_SECRET_PERIOD)
 
 
 def validate_environment() -> None:
@@ -237,9 +277,10 @@ def validate_environment() -> None:
     if _is_predictable_secret(SECRET_KEY):
         raise ImproperlyConfigured(
             'SECRET_KEY при DEBUG=False должен быть криптографически '
-            'случайным: угадываемый (набранный руками) ключ позволяет '
-            'подделывать JWT. Сгенерируйте, например: '
-            'python -c "import secrets; print(secrets.token_urlsafe(64))".'
+            'случайным: структурированные (угадываемые) ключи — фразы, '
+            'последовательности, повторы — позволяют подделывать JWT. '
+            'Сгенерируйте, например: python -c "import secrets; '
+            'print(secrets.token_urlsafe(64))".'
         )
     if not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS:
         raise ImproperlyConfigured(
