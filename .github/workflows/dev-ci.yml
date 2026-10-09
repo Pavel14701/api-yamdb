@@ -12,6 +12,12 @@ on:
         required: true
         type: string
 
+# Минимальные права GITHUB_TOKEN: джобы только читают код и гоняют
+# линтеры/тесты. Вызываемый workflow наследует ограничения вызывающего,
+# но явный блок страхует от прямого запуска (CodeQL-алерт #8).
+permissions:
+  contents: read
+
 jobs:
   ruff:
     name: Ruff — ${{ inputs.developer }}

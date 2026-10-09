@@ -15,6 +15,12 @@ on:
       - main
       - develop
 
+# Минимальные права GITHUB_TOKEN: джобы только читают код и гоняют
+# линтеры/тесты. Закрывает CodeQL-алерт «workflow does not contain
+# permissions» (code-scanning #8).
+permissions:
+  contents: read
+
 jobs:
   pavel:
     name: CI — pavel
