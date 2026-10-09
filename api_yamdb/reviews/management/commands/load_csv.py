@@ -2,13 +2,69 @@
 
 import csv
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
+from reviews.management.exceptions import CsvImportError, RowSaveError
+from reviews.management.parsing import parse_row
 from reviews.models import Category, Comment, Genre, Review, Title
-from users.models import User
+
+# Модель пользователя — как значение таблицы импорта, через
+# get_user_model() (замечание ревью), а не прямым импортом.
+# Как тип она здесь не используется: типизация таблицы идёт
+# через протокол _ModelWithObjects, поэтому танцы с TYPE_CHECKING
+# не нужны — результат вызова подойдёт и статическому чекеру.
+User = get_user_model()
+
+
+class _ModelWithObjects(Protocol):
+    """Протокол модели с менеджером objects (PEP 544).
+
+    Интерфейс объявляет вызываемая сторона: команда использует только
+    наличие менеджера objects (update_or_create, filter), конкретный
+    класс модели ей не нужен (замечание ревью про неявные интерфейсы).
+    """
+
+    # Any: у моделей разные подтипы менеджеров (UserManager и др.),
+    # для команды достаточно самого наличия менеджера и его методов.
+    objects: Any
+
+
+# Таблица импорта: (имя файла, модель, кортеж полей). Порядок важен:
+# сначала справочники (category, genre), затем users, titles и
+# зависимые (review -> comments). Новая сущность добавляется одной
+# строкой сюда, без нового блока кода в handle().
+# Pylance джанговсие кульбиты с
+# monkey-patching objects в рантайме не вывозит
+IMPORT_SPECS: tuple[
+    tuple[str, type[_ModelWithObjects], tuple[str, ...]],
+    ...,
+] = (
+    ('category.csv', Category, ('id', 'name', 'slug')),
+    ('genre.csv', Genre, ('id', 'name', 'slug')),
+    (
+        'users.csv',
+        User,
+        (
+            'id', 'username', 'email', 'role', 'bio',
+            'first_name', 'last_name',
+        ),
+    ),
+    ('titles.csv', Title, ('id', 'name', 'year', 'category_id')),
+    (
+        'review.csv',
+        Review,
+        ('id', 'title_id', 'text', 'author_id', 'score', 'pub_date'),
+    ),
+    (
+        'comments.csv',
+        Comment,
+        ('id', 'review_id', 'text', 'author_id', 'pub_date'),
+    ),
+)
 
 
 class Command(BaseCommand):
@@ -19,85 +75,24 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         """Основная логика выполнения команды."""
         data_dir = Path(settings.BASE_DIR) / 'static' / 'data'
-
-        self._import_csv(
-            data_dir / 'category.csv',
-            Category,
-            ('id', 'name', 'slug')
-        )
-        self._import_csv(
-            data_dir / 'genre.csv',
-            Genre,
-            ('id', 'name', 'slug')
-        )
-        self._import_csv(
-            data_dir / 'users.csv',
-            User,
-            (
-                'id', 'username', 'email', 'role', 'bio',
-                'first_name', 'last_name'
-            )
-        )
-        self._import_csv(
-            data_dir / 'titles.csv',
-            Title,
-            ('id', 'name', 'year', 'category_id')
-        )
-        self._import_csv(
-            data_dir / 'review.csv',
-            Review,
-            ('id', 'title_id', 'text', 'author_id', 'score', 'pub_date')
-        )
-        self._import_csv(
-            data_dir / 'comments.csv',
-            Comment,
-            ('id', 'review_id', 'text', 'author_id', 'pub_date')
-        )
+        for file_name, model, fields in IMPORT_SPECS:
+            self._import_csv(data_dir / file_name, model, fields)
         self._import_genre_titles(data_dir / 'genre_title.csv')
-
         self.stdout.write(self.style.SUCCESS(
             'Все данные успешно импортированы'
         ))
 
-    def _parse_row(
-            self,
-            row: dict[str, Any],
-            fields: tuple[str, ...],
-    ) -> dict[str, Any] | None:
-        """Парсит строку CSV и возвращает словарь."""
-        row_id = row.get('id', '?')
-        try:
-            defaults = {}
-            for field in fields:
-                if field == 'id':
-                    continue
-                csv_field = field
-                if field in {'category_id', 'author_id'}:
-                    csv_field = field.replace('_id', '')
-
-                field_value = row[csv_field]
-                if field in {
-                    'year', 'score', 'category_id',
-                    'title_id', 'author_id', 'review_id'
-                }:
-                    field_value = int(field_value)
-                defaults[field] = field_value
-            return defaults
-        except (KeyError, ValueError) as parse_error:
-            self.stdout.write(
-                self.style.WARNING(
-                    f'Ошибка парсинга в строке {row_id}: {parse_error}'
-                )
-            )
-            return None
-
     def _save_row(
         self,
-        model: type[Any],
+        model: type[_ModelWithObjects],
         row: dict[str, Any],
         defaults: dict[str, Any],
-    ) -> bool:
-        """Сохраняет строку в БД. Возвращает True при успехе, иначе False."""
+    ) -> None:
+        """Сохраняет строку в БД.
+
+        Ошибку БД оборачивает в RowSaveError (boundary-обёртка:
+        исходное исключение доступно как __cause__).
+        """
         row_id = row.get('id', '?')
         try:
             obj, _ = model.objects.update_or_create(
@@ -108,36 +103,33 @@ class Command(BaseCommand):
                 model.objects.filter(pk=obj.pk).update(
                     pub_date=defaults['pub_date']
                 )
-            return True
         except Exception as error:
-            self.stdout.write(
-                self.style.WARNING(
-                    f'Ошибка в строке {row_id}: {error}'
-                )
-            )
-        return False
+            raise RowSaveError(row_id, error) from error
 
     def _import_csv(
         self,
         file_path: Path,
-        model: type[Any],
+        model: type[_ModelWithObjects],
         fields: tuple[str, ...],
     ) -> None:
         """Импортирует данные из CSV в указанную модель."""
         if not file_path.exists():
             self.stdout.write(self.style.ERROR(f'Файл не найден: {file_path}'))
             return
-
         count = 0
         with open(file_path, encoding='utf-8') as csv_file:
             reader = csv.DictReader(csv_file)
             for row in reader:
-                defaults = self._parse_row(row, fields)
-                if defaults is None:
+                try:
+                    defaults = parse_row(row, fields)
+                    self._save_row(model, row, defaults)
+                except CsvImportError as import_error:
+                    # Ожидаемые ошибки импорта: строка пропускается.
+                    self.stdout.write(
+                        self.style.WARNING(str(import_error))
+                    )
                     continue
-                if self._save_row(model, row, defaults):
-                    count += 1
-
+                count += 1
         self.stdout.write(
             f'Импортировано {count} записей модели {model.__name__}'
         )
@@ -147,22 +139,18 @@ class Command(BaseCommand):
         if not file_path.exists():
             self.stdout.write(self.style.ERROR(f'Файл не найден: {file_path}'))
             return
-
         count = 0
         genre_title_relation = Title.genre.through
         with open(file_path, encoding='utf-8') as csv_file:
             reader = csv.DictReader(csv_file)
             for row in reader:
+                row_id = row.get('title_id', '?')
                 try:
                     genre_title_relation.objects.get_or_create(
                         title_id=row['title_id'],
                         genre_id=row['genre_id']
                     )
-                    count += 1
-
                 except Exception as error:
-                    self.stdout.write(
-                        self.style.WARNING(f'Ошибка в M2M строке: {error}')
-                    )
-
+                    raise RowSaveError(row_id, error) from error
+                count += 1
         self.stdout.write(f'Связано {count} жанров с произведениями')

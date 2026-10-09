@@ -19,7 +19,7 @@ from django.urls import include, path
 from django.views.generic import TemplateView
 
 api_v1_urls = [
-    path('', include('api.urls')),
+    path('', include('users.urls')),
     path('', include('reviews.urls')),
 ]
 

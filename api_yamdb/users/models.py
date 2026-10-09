@@ -28,6 +28,14 @@ validate_username = RegexValidator(
 )
 
 
+class UserRole(models.TextChoices):
+    """Роли пользователя (старое ревью #5: TextChoices вместо кортежей)."""
+
+    USER = 'user', 'Пользователь'
+    MODERATOR = 'moderator', 'Модератор'
+    ADMIN = 'admin', 'Администратор'
+
+
 class User(AbstractUser):
     """Кастомная модель пользователя.
 
@@ -36,16 +44,6 @@ class User(AbstractUser):
     Код подтверждения отправляется на email при регистрации
     и используется для получения JWT-токена.
     """
-
-    USER = 'user'
-    MODERATOR = 'moderator'
-    ADMIN = 'admin'
-
-    ROLE_CHOICES = (
-        (USER, 'Пользователь'),
-        (MODERATOR, 'Модератор'),
-        (ADMIN, 'Администратор'),
-    )
 
     username = models.CharField(
         'имя пользователя',
@@ -64,8 +62,8 @@ class User(AbstractUser):
     role = models.CharField(
         'роль',
         max_length=MAX_LENGTH_ROLE,
-        choices=ROLE_CHOICES,
-        default=USER,
+        choices=UserRole.choices,
+        default=UserRole.USER,
         help_text='Роль нового пользователя по умолчанию — "user".',
     )
     bio = models.TextField(
@@ -84,10 +82,17 @@ class User(AbstractUser):
 
         verbose_name = 'Пользователь'
         verbose_name_plural = 'Пользователи'
+        # Сортировка по умолчанию обязательна для моделей с пагинацией
+        ordering = ('username',)
 
     def __str__(self) -> str:
         """Возвращает username пользователя."""
         return self.username
+
+    @property
+    def is_moderator(self) -> bool:
+        """Является ли пользователь модератором."""
+        return self.role == UserRole.MODERATOR
 
     @property
     def is_admin(self) -> bool:
@@ -96,4 +101,4 @@ class User(AbstractUser):
         Суперпользователь всегда считается администратором,
         даже если его роль в базе изменена.
         """
-        return self.role == self.ADMIN or self.is_superuser
+        return self.role == UserRole.ADMIN or self.is_superuser

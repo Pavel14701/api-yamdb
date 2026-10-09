@@ -6,8 +6,6 @@ from rest_framework import permissions
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
-from users.models import User
-
 
 class IsAdmin(permissions.BasePermission):
     """Разрешает доступ только администраторам.
@@ -18,10 +16,7 @@ class IsAdmin(permissions.BasePermission):
 
     def has_permission(self, request: Request, view: APIView) -> bool:
         """Проверяет, авторизован ли пользователь и является ли админом."""
-        user = request.user
-        return user.is_authenticated and (
-            user.role == User.ADMIN or user.is_superuser
-        )
+        return request.user.is_authenticated and request.user.is_admin
 
 
 class IsAdminOrReadOnly(permissions.BasePermission):
@@ -62,7 +57,6 @@ class IsAuthorModeratorAdminOrReadOnly(permissions.BasePermission):
         user = request.user
         return user.is_authenticated and (
             review_or_comment.author == user
-            or user.role == User.MODERATOR
-            or user.role == User.ADMIN
-            or user.is_superuser
+            or user.is_moderator
+            or user.is_admin
         )

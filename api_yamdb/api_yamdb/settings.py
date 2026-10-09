@@ -1,20 +1,46 @@
-"""Настройки проекта YaMDb (Django settings)."""
+"""Настройки проекта YaMDb (Django settings).
 
+Секреты и режимные параметры читаются из переменных окружения
+(stdlib os, без сторонних загрузчиков). Значения по умолчанию
+пригодны для разработки; запуск вне DEBUG с небезопасными
+значениями запрещён валидатором в конце модуля (fail-fast
+при импорте настроек). Список переменных — в .env.example.
+"""
+
+import os
+from datetime import timedelta
 from pathlib import Path
+
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'p&l%385148kslhtyn^##a1)ilz@4zqj=rq&agdol^##zgl9(vs'
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+def _env_bool(name: str, default: bool) -> bool:
+    """Читает булеву переменную окружения ('1'/'true'/'yes'/'on')."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ('1', 'true', 'yes', 'on')
 
-ALLOWED_HOSTS = ['*']
 
+def _env_list(name: str, default: str) -> tuple[str, ...]:
+    """Читает список значений через запятую из переменной окружения."""
+    raw = os.environ.get(name)
+    if raw is None:
+        raw = default
+    return tuple(item.strip() for item in raw.split(',') if item.strip())
+
+
+# Ключ по умолчанию — только для разработки: вне DEBUG валидатор
+# его отвергнет (см. конец модуля).
+DEV_INSECURE_SECRET_KEY = 'django-insecure-dev-only-key-yamdb'
+SECRET_KEY = os.environ.get('SECRET_KEY', DEV_INSECURE_SECRET_KEY)
+# Дефолт False: незаданный DEBUG не должен включать отладку.
+DEBUG = _env_bool('DEBUG', False)
+ALLOWED_HOSTS = _env_list('ALLOWED_HOSTS', '*')
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -124,5 +150,47 @@ REST_FRAMEWORK = {
 
 # Настройки почты для отладки: письма печатаются в консоль,
 # из них берётся confirmation_code для получения токена.
+# Валидатор запрещает дефолтный отправитель вне DEBUG.
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = 'noreply@yamdb.fake'
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@yamdb.fake')
+
+# Явные сроки жизни JWT вместо дефолтов simplejwt (access всего
+# 5 минут). По документации ресурс auth выдаёт один access-токен
+# (схема Token: единственное поле token), refresh-токены не
+# используются — параметры ниже заданы для полноты конфигурации.
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
+
+
+# --- Валидация окружения (fail-fast) --------------------------------------
+# Запуск вне DEBUG с небезопасными значениями — ошибка конфигурации:
+# проект отказывается стартовать, а не молча работает небезопасно.
+# Вызывается из точек входа (manage.py, wsgi.py, asgi.py) после
+# чтения окружения; тесты валидатор не вызывают (им прод не нужен).
+
+
+def validate_environment() -> None:
+    """Проверяет безопасность настроек при DEBUG=False.
+
+    Поднимает ImproperlyConfigured, если вне отладочного режима
+    остались дефолтные (небезопасные) значения секретов.
+    """
+    if DEBUG:
+        return
+    if SECRET_KEY == DEV_INSECURE_SECRET_KEY:
+        raise ImproperlyConfigured(
+            'SECRET_KEY должен быть задан переменной окружения '
+            'при DEBUG=False (см. .env.example).'
+        )
+    if '*' in ALLOWED_HOSTS:
+        raise ImproperlyConfigured(
+            "ALLOWED_HOSTS='*' запрещён при DEBUG=False; "
+            'перечислите хосты через запятую.'
+        )
+    if DEFAULT_FROM_EMAIL == 'noreply@yamdb.fake':
+        raise ImproperlyConfigured(
+            'DEFAULT_FROM_EMAIL должен быть задан при DEBUG=False.'
+        )
