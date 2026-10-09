@@ -10,7 +10,7 @@ defusedxml==0.7.1
 Django==5.1.1
 django-filter==25.1
 django-templated-mail==1.1.1
-django-stubs-ext
+django-stubs-ext==6.1.1
 djangorestframework==3.15.2
 djangorestframework_simplejwt==5.4.0
 djoser==2.3.1

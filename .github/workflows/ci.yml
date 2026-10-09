@@ -15,6 +15,12 @@ on:
       - main
       - develop
 
+# Минимальные права GITHUB_TOKEN: джобы только читают код и гоняют
+# линтеры/тесты. Закрывает CodeQL-алерт «workflow does not contain
+# permissions» (code-scanning #8).
+permissions:
+  contents: read
+
 jobs:
   pavel:
     name: CI — pavel
@@ -60,3 +66,16 @@ jobs:
       test-paths: >-
         tests/test_05_review.py
         tests/test_06_comment.py
+
+  # Сквозные тесты без доменной принадлежности: сервисный слой
+  # (users/reviews) и инфраструктура (настройки, JWT-контракт).
+  # Без if: выполняются на любое событие из блока on (main/develop,
+  # PR) — тесты быстрые и покрывают проект целиком.
+  infra:
+    name: CI — infra
+    uses: ./.github/workflows/dev-ci.yml
+    with:
+      developer: infra
+      test-paths: >-
+        tests/test_09_services.py
+        tests/test_10_settings_jwt.py
