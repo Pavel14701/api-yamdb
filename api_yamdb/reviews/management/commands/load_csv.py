@@ -148,9 +148,18 @@ class Command(BaseCommand):
                 try:
                     genre_title_relation.objects.get_or_create(
                         title_id=row['title_id'],
-                        genre_id=row['genre_id']
+                        genre_id=row['genre_id'],
                     )
                 except Exception as error:
-                    raise RowSaveError(row_id, error) from error
+                    # Битая строка (нет колонки, битый FK, дубль) не
+                    # останавливает импорт остальных связей: предупреждение
+                    # и переход к следующей строке, как в _import_csv
+                    # (замечание ревью).
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f'Строка {row_id} пропущена: {error}'
+                        )
+                    )
+                    continue
                 count += 1
         self.stdout.write(f'Связано {count} жанров с произведениями')

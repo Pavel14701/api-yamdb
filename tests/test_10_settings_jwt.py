@@ -30,18 +30,44 @@ def _make_user_with_code() -> tuple[User, str]:
 class Test10EnvValidator:
     """Fail-fast валидация небезопасных настроек вне DEBUG."""
 
+    # Безопасные значения для НЕцелевого параметра в каждом кейсе:
+    # без изоляции небезопасные значения маскируют друг друга
+    # (проверка упадёт на первом же, и кейс не проверит своё).
+    SAFE_ENV = {
+        'SECRET_KEY': 'x' * 50,
+        'ALLOWED_HOSTS': ('api.yamdb.example',),
+        'DEFAULT_FROM_EMAIL': 'prod@yamdb.example',
+    }
+
     @pytest.mark.parametrize(
         'unsafe_attr, unsafe_value',
         [
             ('SECRET_KEY', project_settings.DEV_INSECURE_SECRET_KEY),
+            ('SECRET_KEY', ''),
+            ('SECRET_KEY', '   '),
+            ('SECRET_KEY', 'too-short-key'),
             ('ALLOWED_HOSTS', ('*',)),
+            ('ALLOWED_HOSTS', ()),
             ('DEFAULT_FROM_EMAIL', 'noreply@yamdb.fake'),
         ],
-        ids=['secret_key', 'allowed_hosts', 'from_email'],
+        ids=[
+            'default-secret-key',
+            'empty-secret-key',
+            'blank-secret-key',
+            'weak-secret-key',
+            'wildcard-hosts',
+            'empty-hosts',
+            'default-from-email',
+        ],
     )
-    def test_unsafe_value_rejected_outside_debug(self, monkeypatch, unsafe_attr, unsafe_value):
-        """Вне DEBUG дефолтные (небезопасные) значения запрещены."""
+    def test_unsafe_value_rejected_outside_debug(
+        self, monkeypatch, unsafe_attr, unsafe_value
+    ):
+        """Вне DEBUG небезопасное значение запрещено при безопасных остальных."""
         monkeypatch.setattr(project_settings, 'DEBUG', False)
+        for attr, value in self.SAFE_ENV.items():
+            if attr != unsafe_attr:
+                monkeypatch.setattr(project_settings, attr, value)
         monkeypatch.setattr(project_settings, unsafe_attr, unsafe_value)
 
         with pytest.raises(ImproperlyConfigured):

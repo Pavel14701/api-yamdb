@@ -1,18 +1,24 @@
 """Юнит-тесты сервисного слоя и чистой логики (не HTTP).
 
 Покрывают напрямую то, что функциональные тесты курса задевают
-только через эндпоинты: signup_user, ретраи доставки письма,
-parse_row, with_rating.
+только через эндпоинты: signup_user (включая гонки параллельных
+регистраций), ретраи доставки письма, parse_row, with_rating,
+толерантность _import_genre_titles к битым строкам.
 """
 
+import io
+import smtplib
 from unittest.mock import patch
 
 import pytest
-from django.db import transaction as db_transaction
+from django.core import mail
+from django.db import IntegrityError, transaction as db_transaction
+from rest_framework.exceptions import ValidationError
 
+from reviews.management.commands.load_csv import Command as LoadCsvCommand
 from reviews.management.exceptions import FieldParseError, MissingColumnError
 from reviews.management.parsing import parse_row
-from reviews.models import Category, Review, Title
+from reviews.models import Category, Genre, Review, Title
 from users.codes import hash_confirmation_code
 from users.exceptions import EmailDeliveryError
 from users.models import User
@@ -25,34 +31,42 @@ from users.services import (
 
 @pytest.mark.django_db
 class Test09SignupService:
-    """signup_user: создание, хэширование кода, регенерация."""
+    """signup_user: создание, хэширование кода, регенерация, гонки."""
 
     USERNAME = 'neo'
     EMAIL = 'neo@example.com'
 
+    @staticmethod
+    def _last_sent_code() -> str:
+        """Код из последнего письма (locmem-бэкенд копит их в mail.outbox)."""
+        return mail.outbox[-1].body.rsplit(': ', 1)[-1]
+
     def test_signup_creates_user_with_hashed_code(self):
-        user, code = signup_user(self.USERNAME, self.EMAIL)
+        user = signup_user(self.USERNAME, self.EMAIL)
 
         assert User.objects.filter(username=self.USERNAME).exists(), (
             'signup_user должен создать пользователя.'
         )
-        assert user.confirmation_code == hash_confirmation_code(code), (
-            'В БД должен храниться хэш кода, а не исходный код.'
-        )
-        assert user.confirmation_code != code, (
-            'Исходный код не должен сохраняться в БД в открытом виде.'
+        assert user.email == self.EMAIL
+        assert user.confirmation_code == hash_confirmation_code(
+            self._last_sent_code()
+        ), 'В БД должен храниться хэш именно отправленного кода.'
+        assert user.confirmation_code != self._last_sent_code(), (
+            'Исходный код не должен храниться в БД в открытом виде.'
         )
 
     def test_repeat_signup_regenerates_code(self):
-        _, first_code = signup_user(self.USERNAME, self.EMAIL)
-        _, second_code = signup_user(self.USERNAME, self.EMAIL)
+        signup_user(self.USERNAME, self.EMAIL)
+        first_hash = User.objects.get(
+            username=self.USERNAME
+        ).confirmation_code
+        signup_user(self.USERNAME, self.EMAIL)
 
-        assert first_code != second_code, (
-            'Повторный signup должен генерировать новый код.'
-        )
-        user = User.objects.get(username=self.USERNAME)
-        assert user.confirmation_code == hash_confirmation_code(second_code), (
-            'В БД должен остаться хэш последнего кода.'
+        second_hash = User.objects.get(
+            username=self.USERNAME
+        ).confirmation_code
+        assert first_hash != second_hash, (
+            'Повторный signup должен обновлять хэш кода в БД.'
         )
 
     def test_atomic_rollback_keeps_user_with_code(self):
@@ -70,6 +84,41 @@ class Test09SignupService:
             'Сбой записи кода должен откатывать создание пользователя.'
         )
 
+    def test_code_is_sent_inside_atomic_block(self):
+        """Письмо уходит внутри транзакции: хэш и код согласованы."""
+        seen: dict[str, bool] = {}
+
+        def probe(email, code):
+            seen['in_atomic'] = db_transaction.get_connection().in_atomic_block
+
+        with patch('users.services._send_code_email', side_effect=probe):
+            signup_user(self.USERNAME, self.EMAIL)
+
+        assert seen['in_atomic'], (
+            'Доставка кода должна выполняться под блокировкой строки '
+            'внутри atomic — иначе параллельный signup перезапишет хэш '
+            'до доставки письма.'
+        )
+
+    def test_existing_user_with_other_email_rejected(self):
+        """Аккаунт с другим email (гонка/админ) не используется."""
+        User.objects.create_user(
+            username=self.USERNAME, email='other@example.com'
+        )
+
+        with pytest.raises(ValidationError):
+            signup_user(self.USERNAME, self.EMAIL)
+
+    def test_email_uniqueness_race_becomes_validation_error(self):
+        """Гонка уникального email — ValidationError, а не сырой 500."""
+        with patch(
+            'users.services.User.objects.get_or_create',
+            side_effect=IntegrityError('unique email'),
+        ):
+            with pytest.raises(ValidationError):
+                signup_user(self.USERNAME, self.EMAIL)
+
+
 
 @pytest.mark.django_db
 class Test09EmailRetry:
@@ -86,6 +135,20 @@ class Test09EmailRetry:
 
         assert send_mock.call_count == 3, (
             'После двух сетевых сбоев письмо должно уйти с третьей попытки.'
+        )
+
+    def test_smtp_exception_is_retried(self):
+        """SMTPException явно входит в ретраи, а не выходит наружу."""
+        failures = [smtplib.SMTPException('relay denied'), None]
+        with patch(
+            'users.services._send_code_email',
+            side_effect=failures,
+        ) as send_mock, patch('users.services.time.sleep'):
+            user = User(username='smtp', email='smtp@example.com')
+            send_confirmation_code(user, 'code123')
+
+        assert send_mock.call_count == 2, (
+            'После сбоя SMTP письмо должно уйти со второй попытки.'
         )
 
     def test_raises_after_exhausted_attempts(self):
@@ -176,4 +239,36 @@ class Test09TitleRating:
         rated = Title.objects.with_rating().get(pk=title.pk)
         assert rated.rating is None, (
             'У произведения без отзывов рейтинг должен быть None.'
+        )
+
+
+@pytest.mark.django_db
+class Test09GenreTitlesImport:
+    """_import_genre_titles: битая строка не останавливает импорт."""
+
+    def test_bad_rows_skipped_good_row_imported(self, tmp_path):
+        category = Category.objects.create(name='Книги', slug='books')
+        title = Title.objects.create(
+            name='Тест', year=2020, category=category
+        )
+        genre = Genre.objects.create(name='Фантастика', slug='sci-fi')
+        csv_path = tmp_path / 'genre_title.csv'
+        csv_path.write_text(
+            'title_id,genre_id\n'
+            f'{title.id},{genre.id}\n'    # валидная строка
+            'abc,def\n'                   # не приводится к int
+            f'{title.id}\n',              # нет колонки genre_id
+            encoding='utf-8',
+        )
+        command = LoadCsvCommand()
+        command.stdout = io.StringIO()
+
+        command._import_genre_titles(csv_path)
+
+        assert title.genre.filter(pk=genre.pk).exists(), (
+            'Валидная связь должна быть импортирована.'
+        )
+        assert command.stdout.getvalue().count('пропущена') == 2, (
+            'Битые строки должны пропускаться с предупреждением, '
+            'не прерывая импорт остальных связей.'
         )

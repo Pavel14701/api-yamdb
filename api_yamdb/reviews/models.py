@@ -10,6 +10,7 @@ from django.db.models.functions import Round
 from django.db.models.query import QuerySet
 
 from reviews.constants import (
+    MIN_YEAR,
     NAME_MAX_LENGTH,
     SCORE_MAX,
     SCORE_MIN,
@@ -28,11 +29,21 @@ def current_year() -> int:
 
 
 def validate_year(value: int) -> None:
-    """Валидатор: год не должен быть больше текущего."""
+    """Валидатор: год в границах [MIN_YEAR, текущий год].
+
+    Нижняя граница — минимум SmallIntegerField поля year: значение
+    отсекается валидатором раньше, чем его отвергнет БД (замечание
+    ревью о непредставимых значениях).
+    """
     current = current_year()
     if value > current:
         raise ValidationError(
             f'Год выпуска не может быть больше текущего ({current}).',
+            code='invalid_year',
+        )
+    if value < MIN_YEAR:
+        raise ValidationError(
+            f'Год выпуска не может быть меньше {MIN_YEAR}.',
             code='invalid_year',
         )
 

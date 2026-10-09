@@ -24,7 +24,7 @@ from api.serializers import (
 )
 from users.exceptions import EmailDeliveryError
 from users.models import User
-from users.services import send_confirmation_code, signup_user
+from users.services import signup_user
 
 
 @api_view(['POST'])
@@ -40,19 +40,20 @@ def signup(request: Request) -> Response:
     """
     serializer = SignUpSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    # Бизнес-логика (пользователь + код) и доставка письма —
-    # в users.services; вьюха отвечает только за HTTP-обвязку.
-    user, code = signup_user(
-        serializer.validated_data['username'],
-        serializer.validated_data['email'],
-    )
-    # Отказ доставки — ожидаемый сбой внешнего сервиса (SMTP),
-    # а не ошибка сервера: отвечаем SERVICE_UNAVAILABLE.
-    # Пользователь уже создан; повторный запрос регенерирует
-    # и высылает код заново.
+    # Бизнес-логика (пользователь + код + доставка письма, включая
+    # гонки параллельных регистраций) — в users.services. ValidationError
+    # о занятых username/email сервис поднимает сам — DRF обработает
+    # её в 400 без дополнительного кода.
     try:
-        send_confirmation_code(user, code)
+        signup_user(
+            serializer.validated_data['username'],
+            serializer.validated_data['email'],
+        )
     except EmailDeliveryError:
+        # Отказ доставки — ожидаемый сбой внешнего сервиса (SMTP),
+        # а не ошибка сервера: честный SERVICE_UNAVAILABLE вместо
+        # сырого 500. Создание аккаунта откатилось; повторный запрос
+        # создаст его заново и вышлет код.
         return Response(
             {
                 'detail': 'Не удалось отправить письмо с кодом, '

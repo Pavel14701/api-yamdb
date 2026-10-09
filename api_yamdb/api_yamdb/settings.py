@@ -3,13 +3,15 @@
 Секреты и режимные параметры читаются из переменных окружения
 (stdlib os, без сторонних загрузчиков). Значения по умолчанию
 пригодны для разработки; запуск вне DEBUG с небезопасными
-значениями запрещён валидатором в конце модуля (fail-fast
-при импорте настроек). Список переменных — в .env.example.
+значениями запрещён функцией validate_environment() — её вызывают
+точки входа (manage.py, wsgi.py, asgi.py). Список переменных —
+в .env.example.
 """
 
 import os
 from datetime import timedelta
 from pathlib import Path
+from typing import Final
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -35,6 +37,10 @@ def _env_list(name: str, default: str) -> tuple[str, ...]:
 # Ключ по умолчанию — только для разработки: вне DEBUG валидатор
 # его отвергнет (см. конец модуля).
 DEV_INSECURE_SECRET_KEY = 'django-insecure-dev-only-key-yamdb'
+# Минимальная длина секретного ключа вне DEBUG: отсекает короткие
+# «вручную придуманные» ключи — угаданный ключ позволяет подделывать
+# подписанные им JWT-токены (замечание ревью).
+MIN_SECRET_KEY_LENGTH: Final = 50
 SECRET_KEY = os.environ.get('SECRET_KEY', DEV_INSECURE_SECRET_KEY)
 # Дефолт False: незаданный DEBUG не должен включать отладку.
 DEBUG = _env_bool('DEBUG', False)
@@ -176,19 +182,32 @@ def validate_environment() -> None:
     """Проверяет безопасность настроек при DEBUG=False.
 
     Поднимает ImproperlyConfigured, если вне отладочного режима
-    остались дефолтные (небезопасные) значения секретов.
+    остались пустые, дефолтные или слабые значения секретов.
     """
     if DEBUG:
         return
+    if not SECRET_KEY.strip():
+        raise ImproperlyConfigured(
+            'SECRET_KEY не может быть пустым при DEBUG=False '
+            '(см. .env.example).'
+        )
     if SECRET_KEY == DEV_INSECURE_SECRET_KEY:
         raise ImproperlyConfigured(
             'SECRET_KEY должен быть задан переменной окружения '
             'при DEBUG=False (см. .env.example).'
         )
-    if '*' in ALLOWED_HOSTS:
+    if len(SECRET_KEY) < MIN_SECRET_KEY_LENGTH:
         raise ImproperlyConfigured(
-            "ALLOWED_HOSTS='*' запрещён при DEBUG=False; "
-            'перечислите хосты через запятую.'
+            f'SECRET_KEY короче {MIN_SECRET_KEY_LENGTH} символов '
+            'запрещён при DEBUG=False: слабый ключ позволяет '
+            'подделывать JWT. Сгенерируйте, например: '
+            'python -c "import secrets; print(secrets.token_urlsafe(64))".'
+        )
+    if not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS:
+        raise ImproperlyConfigured(
+            "ALLOWED_HOSTS при DEBUG=False — непустой список хостов "
+            "через запятую ('*' запрещён: без хостов API недоступен, "
+            'с wildcard запросы отвергаются или опасны).'
         )
     if DEFAULT_FROM_EMAIL == 'noreply@yamdb.fake':
         raise ImproperlyConfigured(

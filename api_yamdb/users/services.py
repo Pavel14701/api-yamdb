@@ -6,12 +6,14 @@
 """
 
 import logging
+import smtplib
 import time
 from typing import Final
 
 from django.conf import settings
 from django.core.mail import send_mail
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from rest_framework.exceptions import ValidationError
 
 from users.codes import generate_confirmation_code, hash_confirmation_code
 from users.exceptions import EmailDeliveryError
@@ -24,35 +26,65 @@ logger = logging.getLogger(__name__)
 EMAIL_MAX_ATTEMPTS: Final = 3
 EMAIL_RETRY_BACKOFF: Final = 0.2
 
-# Письмо шлём снаружи транзакции: медленный SMTP не должен держать
-# блокировки БД (антипаттерн «почта внутри atomic»). OSError
-# покрывает и smtplib.SMTPException (наследуется от OSError),
-# и ConnectionError.
-_RETRYABLE_MAIL_ERRORS = (ConnectionError, OSError)
+# smtplib.SMTPException назван явно, хотя и наследуется от OSError:
+# при изменении иерархии исключений stdlib ретраи не потеряются
+# (замечание ревью).
+_RETRYABLE_MAIL_ERRORS = (ConnectionError, smtplib.SMTPException, OSError)
+
+MSG_USERNAME_TAKEN = 'Такой username уже занят.'
+MSG_EMAIL_TAKEN = 'Такой email уже зарегистрирован.'
 
 
-def signup_user(username: str, email: str) -> tuple[User, str]:
-    """Создаёт пользователя или находит существующего по username.
+@transaction.atomic
+def signup_user(username: str, email: str) -> User:
+    """Создаёт пользователя и доставляет ему код подтверждения.
 
-    Существующий пользователь гарантированно имеет тот же email —
-    это проверяет SignUpSerializer до вызова. Генерирует новый код
-    подтверждения: в БД храним хэш (update_fields — точечный
-    UPDATE, чтобы не перезаписать поля, изменённые админом
-    параллельно), исходный код возвращаем для отправки.
+    Возвращает пользователя (код наружу не отдаётся — он уходит
+    только на email). Конфликты уникальности поднимают DRF
+    ValidationError (вьюха отдаст 400), отказ доставки —
+    EmailDeliveryError (вьюха отдаст 503).
 
-    Обе операции — под transaction.atomic: без транзакции это два
-    отдельных авто-коммита, и сбой UPDATE оставлял бы в БД
-    пользователя без кода подтверждения.
+    Гонки параллельных регистраций обработаны:
+    - get_or_create сам разрешает гонку создания по username
+      (повторный get после IntegrityError);
+    - гонка уникального email у РАЗНЫХ username доходит до нас
+      IntegrityError'ом и превращается в ValidationError;
+    - select_for_update сериализует повторные регистрации одного
+      аккаунта: письмо отправляется под блокировкой строки, поэтому
+      хэш в БД и доставленный код всегда согласованы — параллельный
+      запрос не может перезаписать хэш между сохранением и доставкой
+      (замечание ревью).
+
+    Письмо отправляется ВНУТРИ транзакции: раньше доставку выносили
+    наружу («SMTP держит блокировки БД»), но вне блокировки гонка
+    портила код подтверждения — корректность важнее, а цена блокировки
+    ограничена тремя ретраями. Сбой доставки откатывает и создание
+    пользователя: повторный signup создаст аккаунт заново и пришлёт
+    свежий код.
     """
-    with transaction.atomic():
-        user, _ = User.objects.get_or_create(
+    try:
+        User.objects.get_or_create(
             username=username,
             defaults={'email': email},
         )
-        code = generate_confirmation_code()
-        user.confirmation_code = hash_confirmation_code(code)
-        user.save(update_fields=('confirmation_code',))
-    return user, code
+    except IntegrityError:
+        # Сюда попадает только гонка email-уникальности: конфликт
+        # username get_or_create разрешает внутренним повторным get.
+        raise ValidationError({'email': MSG_EMAIL_TAKEN}) from None
+    # Блокировка строки: конкурирующие регистрации одного аккаунта
+    # выполняют блок ниже строго последовательно.
+    user = User.objects.select_for_update().get(username=username)
+    if user.email != email:
+        # Аккаунт создан между проверкой сериализатора и текущим
+        # запросом (параллельный signup или админ) с другим email —
+        # чужой аккаунт не используем и код на чужой адрес не шлём.
+        raise ValidationError({'username': MSG_USERNAME_TAKEN})
+    code = generate_confirmation_code()
+    user.confirmation_code = hash_confirmation_code(code)
+    # Точечный UPDATE: не перезаписать поля, изменённые админом.
+    user.save(update_fields=('confirmation_code',))
+    send_confirmation_code(user, code)
+    return user
 
 
 def send_confirmation_code(user: User, code: str) -> None:

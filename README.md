@@ -117,6 +117,11 @@ pip install -r requirements.txt
 cd api_yamdb
 python manage.py migrate
 python manage.py load_csv       # импорт данных из static/data/*.csv
+
+# Для runserver (в отличие от migrate/load_csv) вне DEBUG нужны
+# переменные окружения — см. .env.example. Для локальной разработки
+# достаточно включить DEBUG:
+set DEBUG=true                  # PowerShell: $env:DEBUG='true'; bash: export DEBUG=true
 python manage.py runserver
 ```
 

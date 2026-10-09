@@ -3,6 +3,24 @@
 import os
 import sys
 
+# Команды первоначальной настройки и разработки: работают на чистом
+# клоне без переменных окружения — документированный `migrate` не
+# должен падать до окончания настройки (замечание ревью). Сервисные
+# точки входа (runserver, wsgi.py, asgi.py) валидацию проходят как раньше.
+SETUP_COMMANDS = frozenset({
+    'check',
+    'collectstatic',
+    'createsuperuser',
+    'dbshell',
+    'load_csv',
+    'makemigrations',
+    'migrate',
+    'shell',
+    'showmigrations',
+    'sqlmigrate',
+    'test',
+})
+
 
 def main() -> None:
     """Запускает административные команды Django."""
@@ -15,10 +33,12 @@ def main() -> None:
             "available on your PYTHONPATH environment variable? Did you "
             "forget to activate a virtual environment?"
         ) from exc
-    # Fail-fast проверка окружения (небезопасные дефолты вне DEBUG).
-    from api_yamdb.settings import validate_environment
+    # Fail-fast проверка окружения (небезопасные дефолты вне DEBUG) —
+    # кроме команд настройки (см. SETUP_COMMANDS).
+    if len(sys.argv) < 2 or sys.argv[1] not in SETUP_COMMANDS:
+        from api_yamdb.settings import validate_environment
 
-    validate_environment()
+        validate_environment()
     execute_from_command_line(sys.argv)
 
 
