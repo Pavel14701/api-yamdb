@@ -151,4 +151,3 @@ media/
 .ruff_cache
 review_results_files
 review_results.html
-REVIEW_FIXES_LOG.txt
