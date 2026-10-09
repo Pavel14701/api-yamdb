@@ -54,8 +54,10 @@ def signup(request: Request) -> Response:
         send_confirmation_code(user, code)
     except EmailDeliveryError:
         return Response(
-            {'detail': 'Не удалось отправить письмо с кодом, '
-                       'повторите запрос позже.'},
+            {
+                'detail': 'Не удалось отправить письмо с кодом, '
+                'повторите запрос позже.'
+            },
             status=HTTPStatus.SERVICE_UNAVAILABLE,
         )
     return Response(serializer.data, status=HTTPStatus.OK)
