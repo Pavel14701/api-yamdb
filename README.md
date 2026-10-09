@@ -9,13 +9,28 @@ YaMDb собирает отзывы пользователей на произв
 
 ## Использованные технологии
 
+**Рантайм:**
+
 - [Python 3.12](https://docs.python.org/3/) — язык проекта
 - [Django 5.1](https://docs.djangoproject.com/en/5.1/) — веб-фреймворк (ORM, миграции, админка, management-команды)
 - [Django REST Framework 3.15](https://www.django-rest-framework.org/) — REST API (вьюсеты, сериализаторы, права, пагинация)
-- [SimpleJWT](https://django-rest-framework-simplejwt.readthedocs.io/) — аутентификация по JWT-токену
-- [django-filter](https://django-filter.readthedocs.io/) — фильтрация произведений
+- [SimpleJWT 5.4](https://django-rest-framework-simplejwt.readthedocs.io/) — аутентификация по JWT-токену (access на 24 часа)
+- [django-filter 25.1](https://django-filter.readthedocs.io/) — фильтрация произведений (категория, жанр, год, имя)
 - [SQLite3](https://www.sqlite.org/) — база данных
-- [pytest](https://docs.pytest.org/) — тесты (90 шт.), [ruff](https://docs.astral.sh/ruff/) / [flake8](https://flake8.pycqa.org/) — линтеры, [mypy](https://mypy-lang.org/) — строгая типизация
+
+**Качество кода и тесты:**
+
+- [pytest 8.3](https://docs.pytest.org/) + [pytest-django](https://pytest-django.readthedocs.io/) — 110 тестов (курсовые + юнит-тесты сервисного слоя и настроек)
+- [ruff](https://docs.astral.sh/ruff/) — основной линтер (B, C4, D/pydocstyle, E, F, I, N, SIM, UP, W)
+- [flake8 7.1](https://flake8.pycqa.org/) — линтер (PEP 8, `max-complexity=10`)
+- [mypy](https://mypy-lang.org/) — строгая типизация (`strict`, плагины django-stubs / djangorestframework-stubs)
+
+**Инфраструктура:**
+
+- [GitHub Actions](https://docs.github.com/actions) — CI: линтеры + pytest на push и PR в `main`/`develop` (переиспользуемый workflow + джобы по участникам и сквозная джоба `infra`)
+
+Зависимости: рантайм — `requirements.txt`; инструменты разработки — группа `dev` в `pyproject.toml`.
+
 
 ## Возможности API
 
@@ -112,14 +127,15 @@ python manage.py runserver
 ## Тесты и CI
 
 ```bash
-pytest            # 90 тестов
+pytest            # 110 тестов
 ruff check .      # линтер
 flake8            # линтер (PEP8)
 mypy              # строгая типизация
 ```
 
-GitHub Actions запускает все четыре проверки на push и PR в `main`/`develop`.
-Каждая джоба матчится на ветку автора (`contains(head_ref, ...)`).
+GitHub Actions запускает все четыре проверки на push и PR в `main`/`develop`:
+доменные джобы участников (матчатся на ветку автора) плюс сквозная джоба
+`infra` для тестов без доменной принадлежности.
 
 ## Команда
 
