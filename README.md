@@ -151,7 +151,7 @@ GitHub Actions запускает все четыре проверки на push
 | Участник | Что сделал |
 |---|---|
 | **Павел Кутья** (тимлид) | инфраструктура и интеграция: CI/CD (диспетчер + reusable workflow: ruff/flake8/mypy strict/pytest); ревью и слияние всех веток, разрешение конфликтов; багфиксы (запрет анонимного POST, 405 на PUT, django-filter в requirements); hotfix моделей и миграций reviews; типизация views/serializers под mypy strict; тесты-ТЗ импорта CSV (10 тестов) и фикс pub_date в импорте; финальная сборка `develop` → `master` |
-| **Карина Савина** (dev) | модели Category, Genre, Title + миграции; все вьюсеты проекта (category → genre → title → reviews → comments) и консолидация всех сериализаторов в `api/serializers.py`; её версия вошла в `develop` (CI зелёный); |
+| **Карина Савина** (dev) | модели Category, Genre, Title + миграции; все вьюсеты проекта (category → genre → title → reviews → comments) и консолидация всех сериализаторов в `api/serializers.py` (при финальном ревью разнесены по доменам: `users/serializers.py`, `reviews/serializers.py`); её версия вошла в `develop` (CI зелёный); |
 | **Елена Тишина** (dev) | модели Review, Comment + права доступа; маршрутизация (`reviews/urls.py`); аннотация рейтинга произведения (Avg); management-команда `load_csv` — импорт 7 CSV-файлов с `update_or_create` и толерантностью к битым строкам (задача перераспределена с Карины); |
 
 ## Автор

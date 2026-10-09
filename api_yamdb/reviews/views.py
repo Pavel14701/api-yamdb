@@ -10,7 +10,9 @@ from api.permissions import (
     IsAdminOrReadOnly,
     IsAuthorModeratorAdminOrReadOnly,
 )
-from api.serializers import (
+from reviews.filters import TitleFilter
+from reviews.models import Category, Comment, Genre, Review, Title
+from reviews.serializers import (
     CategorySerializer,
     CommentSerializer,
     GenreSerializer,
@@ -18,8 +20,6 @@ from api.serializers import (
     TitleReadSerializer,
     TitleWriteSerializer,
 )
-from reviews.filters import TitleFilter
-from reviews.models import Category, Comment, Genre, Review, Title
 
 
 class CategoryViewSet(
