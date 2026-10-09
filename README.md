@@ -107,6 +107,12 @@ curl -X POST http://127.0.0.1:8000/api/v1/titles/1/reviews/1/comments/ \
 
 ## Запуск
 
+Первичные команды настройки (`migrate`, `load_csv`, `collectstatic`,
+`createsuperuser` и т.п.) работают на свежем клоне **без каких-либо
+переменных окружения** — окружение нужно только сервису (`runserver`,
+прод-сервер): вне `DEBUG=true` проект отказывается стартовать с
+дефолтными секретами (fail-fast валидация, см. `.env.example`).
+
 ```bash
 git clone https://github.com/Pavel14701/api-yamdb.git
 cd api-yamdb
@@ -118,9 +124,7 @@ cd api_yamdb
 python manage.py migrate
 python manage.py load_csv       # импорт данных из static/data/*.csv
 
-# Для runserver (в отличие от migrate/load_csv) вне DEBUG нужны
-# переменные окружения — см. .env.example. Для локальной разработки
-# достаточно включить DEBUG:
+# Для локального запуска достаточно включить DEBUG:
 set DEBUG=true                  # PowerShell: $env:DEBUG='true'; bash: export DEBUG=true
 python manage.py runserver
 ```
