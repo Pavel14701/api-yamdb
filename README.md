@@ -7,11 +7,15 @@ YaMDb собирает отзывы пользователей на произв
 рейтинг — среднее арифметическое оценок из отзывов, округлённое до целого.
 На одно произведение можно оставить несколько отзывов и комментировать чужие.
 
-## Стек
+## Использованные технологии
 
-- Python 3.12, Django 5.1, Django REST Framework 3.15
-- SimpleJWT (аутентификация), djoser (регистрация), django-filter
-- SQLite3, pytest, ruff / flake8 / mypy (strict)
+- [Python 3.12](https://docs.python.org/3/) — язык проекта
+- [Django 5.1](https://docs.djangoproject.com/en/5.1/) — веб-фреймворк (ORM, миграции, админка, management-команды)
+- [Django REST Framework 3.15](https://www.django-rest-framework.org/) — REST API (вьюсеты, сериализаторы, права, пагинация)
+- [SimpleJWT](https://django-rest-framework-simplejwt.readthedocs.io/) — аутентификация по JWT-токену
+- [django-filter](https://django-filter.readthedocs.io/) — фильтрация произведений
+- [SQLite3](https://www.sqlite.org/) — база данных
+- [pytest](https://docs.pytest.org/) — тесты (90 шт.), [ruff](https://docs.astral.sh/ruff/) / [flake8](https://flake8.pycqa.org/) — линтеры, [mypy](https://mypy-lang.org/) — строгая типизация
 
 ## Возможности API
 
@@ -124,3 +128,11 @@ GitHub Actions запускает все четыре проверки на push
 | **Павел Кутья** (тимлид) | инфраструктура и интеграция: CI/CD (диспетчер + reusable workflow: ruff/flake8/mypy strict/pytest); ревью и слияние всех веток, разрешение конфликтов; багфиксы (запрет анонимного POST, 405 на PUT, django-filter в requirements); hotfix моделей и миграций reviews; типизация views/serializers под mypy strict; тесты-ТЗ импорта CSV (10 тестов) и фикс pub_date в импорте; финальная сборка `develop` → `master` |
 | **Карина Савина** (dev) | модели Category, Genre, Title + миграции; все вьюсеты проекта (category → genre → title → reviews → comments) и консолидация всех сериализаторов в `api/serializers.py`; её версия вошла в `develop` (CI зелёный); |
 | **Елена Тишина** (dev) | модели Review, Comment + права доступа; маршрутизация (`reviews/urls.py`); аннотация рейтинга произведения (Avg); management-команда `load_csv` — импорт 7 CSV-файлов с `update_or_create` и толерантностью к битым строкам (задача перераспределена с Карины); |
+
+## Автор
+
+Проект выполнен в рамках учебного модуля Яндекса (командная работа).
+
+- **Павел Кутья** (тимлид) — [github.com/Pavel14701](https://github.com/Pavel14701)
+- **Карина Савина** (dev)
+- **Елена Тишина** (dev)

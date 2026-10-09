@@ -15,6 +15,10 @@ def main() -> None:
             "available on your PYTHONPATH environment variable? Did you "
             "forget to activate a virtual environment?"
         ) from exc
+    # Fail-fast проверка окружения (небезопасные дефолты вне DEBUG).
+    from api_yamdb.settings import validate_environment
+
+    validate_environment()
     execute_from_command_line(sys.argv)
 
 
