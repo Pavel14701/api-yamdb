@@ -1,0 +1,1 @@
+.header{height:auto;color:inherit;z-index:101;position:relative}.header__content{box-sizing:border-box;flex:0;height:auto;padding:0 16px}.header__footer{height:0}.header__footer_visible{height:unset;flex:1;overflow:auto}.header .prisma-header__block{margin-block-start:.75rem;margin-block-end:.375rem}.header .prisma-header__block:empty{margin:0}

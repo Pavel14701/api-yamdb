@@ -1,0 +1,1 @@
+.prisma-spinner{transform-origin:50%;animation:1s infinite spin}@keyframes spin{to{transform:rotate(360deg)}}
