@@ -63,9 +63,9 @@ class ReviewSerializer(serializers.ModelSerializer['Review']):
             title_id = view.kwargs.get('title_id')
             # Прямой запрос к Review вместо join через Title —
             # то же условие: отзыв этого автора на это произведение.
-            if Review.objects.filter(
-                title_id=title_id,
-                author=author,
+            if Title.objects.filter(
+                id=title_id,
+                reviews__author=author,
             ).exists():
                 raise ValidationError(
                     'Вы уже оставили отзыв на это произведение!'

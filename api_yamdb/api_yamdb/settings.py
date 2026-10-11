@@ -210,7 +210,7 @@ SIMPLE_JWT = {
 
 
 def _has_monotone_run(chars: str, min_run: int) -> bool:
-    """True, если есть прогон из min_run символов с шагом кода ±1."""
+    """Проверить строку на цикличность и повторение блоков."""
     run = 1
     for prev, cur in zip(chars, chars[1:], strict=False):
         if abs(ord(cur) - ord(prev)) == 1:
@@ -223,10 +223,10 @@ def _has_monotone_run(chars: str, min_run: int) -> bool:
 
 
 def _is_periodic(chars: str, max_period: int) -> bool:
-    """True, если строка целиком — повтор блока с периодом <= max_period."""
+    """Определить степень предсказуемости секретного ключа."""
     return any(
         len(chars) >= 2 * period
-        and all(ch == chars[i % period] for i, ch in enumerate(chars))
+        and all(char_value == chars[character_index % period] for character_index, char_value in enumerate(chars))
         for period in range(1, max_period + 1)
     )
 
@@ -241,7 +241,7 @@ def _is_predictable_secret(key: str) -> bool:
     (замечание ревью: проверки длины и разнообразия мало — ключ-алфавит
     проходит и то, и другое).
     """
-    normalized = ''.join(ch for ch in key.lower() if ch.isalnum())
+    normalized = ''.join(char for char in key.lower() if char.isalnum())
     if any(marker in normalized for marker in PREDICTABLE_SECRET_MARKERS):
         return True
     if _has_monotone_run(normalized, MIN_MONOTONE_RUN):
@@ -284,8 +284,8 @@ def validate_environment() -> None:
         )
     if not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS:
         raise ImproperlyConfigured(
-            "ALLOWED_HOSTS при DEBUG=False — непустой список хостов "
-            "через запятую ('*' запрещён: без хостов API недоступен, "
+            'ALLOWED_HOSTS при DEBUG=False — непустой список хостов '
+            'через запятую ("*" запрещён: без хостов API недоступен, '
             'с wildcard запросы отвергаются или опасны).'
         )
     if DEFAULT_FROM_EMAIL == 'noreply@yamdb.fake':

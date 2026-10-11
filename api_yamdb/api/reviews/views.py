@@ -12,7 +12,7 @@ from api.permissions import (
 )
 from reviews.filters import TitleFilter
 from reviews.models import Category, Comment, Genre, Review, Title
-from reviews.serializers import (
+from api.reviews.serializers import (
     CategorySerializer,
     CommentSerializer,
     GenreSerializer,

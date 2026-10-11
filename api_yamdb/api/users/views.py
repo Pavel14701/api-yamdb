@@ -19,7 +19,7 @@ from rest_framework_simplejwt.tokens import AccessToken
 from api.permissions import IsAdmin
 from users.exceptions import EmailDeliveryError
 from users.models import User
-from users.serializers import (
+from api.users.serializers import (
     GetTokenSerializer,
     SignUpSerializer,
     UserMeSerializer,
@@ -28,8 +28,8 @@ from users.serializers import (
 from users.services import signup_user
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
+@api_view(('POST',))
+@permission_classes((AllowAny,))
 def signup(request: Request) -> Response:
     """Самостоятельная регистрация пользователя (POST /auth/signup/).
 
@@ -65,8 +65,8 @@ def signup(request: Request) -> Response:
     return Response(serializer.data, status=HTTPStatus.OK)
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
+@api_view(('POST',))
+@permission_classes((AllowAny,))
 def obtain_token(request: Request) -> Response:
     """Выдача JWT-токена (POST /auth/token/).
 
