@@ -34,24 +34,8 @@ def _env_list(name: str, default: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in raw.split(',') if item.strip())
 
 
-# Ключ по умолчанию — только для разработки: вне DEBUG валидатор
-# его отвергнет (см. конец модуля).
 DEV_INSECURE_SECRET_KEY = 'django-insecure-dev-only-key-yamdb'
-# Минимальная длина секретного ключа вне DEBUG: отсекает короткие
-# «вручную придуманные» ключи — угаданный ключ позволяет подделывать
-# подписанные им JWT-токены (замечание ревью).
 MIN_SECRET_KEY_LENGTH: Final = 50
-# Эвристика «набранного руками» (угадываемого) ключа. Офлайн-проверка
-# одной строки на непредсказуемость в принципе сводится к детекторам
-# известных слабых структур: энтропийные метрики не работают — частотная
-# энтропия и min-entropy (len * log2(|алфавит|)) МАКСИМАЛЬНЫ у
-# перечисления алфавита, а сжатие ловит только повторы (эксперимент:
-# deflate-сжимаемость ключа-алфавита 1.031 против 1.023 у случайного
-# токена — «случайнее» случайного). Гарантию даёт только генерация
-# CSPRNG — сообщение об ошибке подсказывает команду.
-# Маркеры проверяются по нормализованному виду (нижний регистр,
-# только буквы и цифры): дев-значения, словарные слова и ряды
-# клавиатуры (qwerty/asdfgh/zxcvbn, йцукен/фыва).
 PREDICTABLE_SECRET_MARKERS = (
     'djangoinsecure',
     'secret',
@@ -66,14 +50,9 @@ PREDICTABLE_SECRET_MARKERS = (
     'фыва',
     'example',
 )
-# Минимальная длина монотонного прогона (соседние кодовые точки):
-# перечисление алфавита 'ABC...XYZ012...' даёт 30+ разных символов
-# и не сжимается, но элементарно угадывается (замечание ревью).
 MIN_MONOTONE_RUN: Final = 6
-# Максимальный период повторяющегося блока: 'q' * 60, 'ab12' * 15...
 MAX_SECRET_PERIOD: Final = 12
 SECRET_KEY = os.environ.get('SECRET_KEY', DEV_INSECURE_SECRET_KEY)
-# Дефолт False: незаданный DEBUG не должен включать отладку.
 DEBUG = _env_bool('DEBUG', False)
 ALLOWED_HOSTS = _env_list('ALLOWED_HOSTS', '*')
 
@@ -92,8 +71,6 @@ INSTALLED_APPS = [
     'reviews',
 ]
 
-# Кастомная модель пользователя. Должна быть задана ДО первой
-# миграции проекта.
 AUTH_USER_MODEL = 'users.User'
 
 MIDDLEWARE = [
@@ -173,7 +150,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-STATICFILES_DIRS = ((BASE_DIR / 'static/'),)
+STATICFILES_DIRS = ((BASE_DIR / 'static'),)
 
 # Настройки DRF: аутентификация по JWT-токену, пагинация списков.
 REST_FRAMEWORK = {
@@ -185,16 +162,9 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10,
 }
 
-# Настройки почты для отладки: письма печатаются в консоль,
-# из них берётся confirmation_code для получения токена.
-# Валидатор запрещает дефолтный отправитель вне DEBUG.
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@yamdb.fake')
 
-# Явные сроки жизни JWT вместо дефолтов simplejwt (access всего
-# 5 минут). По документации ресурс auth выдаёт один access-токен
-# (схема Token: единственное поле token), refresh-токены не
-# используются — параметры ниже заданы для полноты конфигурации.
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
@@ -202,23 +172,16 @@ SIMPLE_JWT = {
 }
 
 
-# --- Валидация окружения (fail-fast) --------------------------------------
-# Запуск вне DEBUG с небезопасными значениями — ошибка конфигурации:
-# проект отказывается стартовать, а не молча работает небезопасно.
-# Вызывается из точек входа (manage.py, wsgi.py, asgi.py) после
-# чтения окружения; тесты валидатор не вызывают (им прод не нужен).
-
-
 def _has_monotone_run(chars: str, min_run: int) -> bool:
     """True, если есть прогон из min_run символов с шагом кода ±1."""
-    run = 1
-    for prev, cur in zip(chars, chars[1:], strict=False):
-        if abs(ord(cur) - ord(prev)) == 1:
-            run += 1
-            if run >= min_run:
+    run_length = 1
+    for previous_char, current_char in zip(chars, chars[1:], strict=False):
+        if abs(ord(current_char) - ord(previous_char)) == 1:
+            run_length += 1
+            if run_length >= min_run:
                 return True
         else:
-            run = 1
+            run_length = 1
     return False
 
 
