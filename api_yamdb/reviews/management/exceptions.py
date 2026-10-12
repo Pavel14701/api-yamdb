@@ -15,9 +15,9 @@ class MissingColumnError(CsvImportError):
 
     def __init__(self, row_id: str, column: str) -> None:
         """Сохраняет номер строки и имя колонки для сообщения."""
+        super().__init__(f'В строке {row_id} нет колонки {column}')
         self.row_id = row_id
         self.column = column
-        super().__init__(f'В строке {row_id} нет колонки {column}')
 
 
 class FieldParseError(CsvImportError):
@@ -25,8 +25,8 @@ class FieldParseError(CsvImportError):
 
     def __init__(self, row_id: str, message: str) -> None:
         """Сохраняет номер строки и текст ошибки парсинга."""
-        self.row_id = row_id
         super().__init__(f'Ошибка парсинга в строке {row_id}: {message}')
+        self.row_id = row_id
 
 
 class RowSaveError(CsvImportError):

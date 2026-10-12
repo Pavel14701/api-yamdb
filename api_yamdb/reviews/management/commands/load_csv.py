@@ -1,6 +1,7 @@
 """Management-команда для импорта данных из CSV."""
 
 import csv
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -85,8 +86,8 @@ class Command(BaseCommand):
     def _save_row(
         self,
         model: type[_ModelWithObjects],
-        row: dict[str, Any],
-        defaults: dict[str, Any],
+        row: Mapping[str, Any],
+        defaults: Mapping[str, Any],
     ) -> None:
         """Сохраняет строку в БД.
 
@@ -94,6 +95,12 @@ class Command(BaseCommand):
         исходное исключение доступно как __cause__).
         """
         row_id = row.get('id', '?')
+        # Вынос if 'pub_date' in defaults: из try тянет за собой вынос
+        # .update() — а он тоже обращается к БД и тоже может упасть.
+        # Тогда падение второго вызова уйдёт сырым, минуя RowSaveError,
+        # т.е. контракт функции """оборачивает ошибку БД""" сломается.
+        # Оба DB-вызова - часть одной операции """"сохранить строку""",
+        # поэтому try на них обоих и есть минимальный осмысленный.
         try:
             obj, _ = model.objects.update_or_create(
                 id=row['id'],

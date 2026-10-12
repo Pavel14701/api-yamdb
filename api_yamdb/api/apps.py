@@ -3,6 +3,7 @@
 from django.apps import AppConfig
 
 
+# Оставлен для тестов, удаление - регрессия
 class ApiConfig(AppConfig):
     """Настройки приложения с логикой API."""
 

@@ -1,9 +1,11 @@
 """Маршруты для отзывов и комментариев."""
 
+# Требования тестов, если положить в апи регрессия
+
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from reviews.views import (
+from reviews.api.v1.views import (
     CategoryViewSet,
     CommentViewSet,
     GenreViewSet,

@@ -1,9 +1,11 @@
 """Маршруты пользователей и аутентификации (приложение users)."""
 
+# Требования тестов, если положить в апи регрессия
+
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from users import views
+from users.api.v1 import views
 
 users_router = DefaultRouter()
 users_router.register('users', views.UserViewSet, basename='users')

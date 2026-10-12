@@ -28,6 +28,10 @@ validate_username = RegexValidator(
 )
 
 
+# TextChoices - это Enum для выбора значений в CharField.
+# Он не создаёт таблицу в БД, у него нет менеджера objects,
+# его нельзя запросить через ORM, и он не отдаётся списком через API.
+# Это просто набор констант с человекочитаемыми подписями
 class UserRole(models.TextChoices):
     """Роли пользователя (старое ревью #5: TextChoices вместо кортежей)."""
 
