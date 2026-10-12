@@ -54,22 +54,23 @@ class ReviewSerializer(serializers.ModelSerializer['Review']):
         fields = ('id', 'text', 'author', 'score', 'pub_date')
         read_only_fields = ('author', 'pub_date')
 
+    # Mapping избыточен DRF кладёт в validate именно dict
     def validate(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Проверка уникальности отзыва."""
+        """Запрещает второй отзыв автора на то же произведение.
+
+        Гонки закрыты UniqueConstraint в Review.Meta;
+        здесь — 400 с понятным текстом вместо 500.
+        """
+        if self.instance is not None:
+            return data
         request = self.context.get('request')
-        view = self.context.get('view')
-        if request and view and request.method == 'POST':
-            author = request.user
-            title_id = view.kwargs.get('title_id')
-            # Прямой запрос к Review вместо join через Title —
-            # то же условие: отзыв этого автора на это произведение.
-            if Review.objects.filter(
-                title_id=title_id,
-                author=author,
-            ).exists():
-                raise ValidationError(
-                    'Вы уже оставили отзыв на это произведение!'
-                )
+        title_id = self.context.get('title_id')
+        if request is None or title_id is None:
+            return data
+        if request.user.reviews.filter(title_id=title_id).exists():
+            raise ValidationError(
+                'Вы уже оставили отзыв на это произведение!'
+            )
         return data
 
 

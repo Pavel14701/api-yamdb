@@ -1,13 +1,12 @@
 """Модели приложения reviews."""
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.db.models import Avg, IntegerField
-from django.db.models.functions import Round
-from django.db.models.query import QuerySet
 
 from reviews.constants import (
     MIN_YEAR,
@@ -17,10 +16,18 @@ from reviews.constants import (
     SLUG_MAX_LENGTH,
 )
 
+# Импорт QuerySet'а из отдельного модуля: models.py отвечает за
+# структуру данных, а логика запросов живёт в querysets.py.
+from reviews.querysets import TitleQuerySet
+
 # Прямой импорт класса пользователя для FK: users — проектное
 # приложение, цикла нет; для локальной модели это эквивалент
 # settings.AUTH_USER_MODEL, но сохраняет статическую типизацию FK.
-from users.models import User
+# проще джангу переписать чем эти стабы заставить работать
+if TYPE_CHECKING:
+    from users.models import User
+else:
+    User = get_user_model()
 
 
 def current_year() -> int:
@@ -92,26 +99,8 @@ class Genre(BaseNameSlugModel):
         verbose_name_plural = 'Жанры'
 
 
-class TitleQuerySet(models.QuerySet['Title']):
-    """QuerySet произведений с аннотациями для выдачи API."""
-
-    def with_rating(self) -> QuerySet['Title']:
-        """Аннотирует целочисленный средний рейтинг по отзывам.
-
-        rating — округлённый средний балл; None, если отзывов нет.
-        Аннотация не сбрасывает Meta.ordering ('name'), сортировка
-        остаётся по названию.
-        """
-        queryset: QuerySet[Title] = self.annotate(
-            rating=Round(Avg('reviews__score'), output_field=IntegerField()),
-        )
-        return queryset
-
-
 class Title(models.Model):
     """Модель произведения (фильм, книга, песня и т.д.)."""
-
-    objects = TitleQuerySet.as_manager()
 
     name = models.CharField(
         max_length=NAME_MAX_LENGTH,
@@ -120,7 +109,7 @@ class Title(models.Model):
     year = models.SmallIntegerField(
         # SmallIntegerField: 2 байта, диапазон -32768..32767 — хватает
         # и на произведения Древнего Рима (отрицательные годы), и на
-        # ~30000 лет вперёд (замечание ревью).
+        # ~30000 лет вперёд.
         validators=(validate_year,),
         db_index=True,
         verbose_name='Год выпуска',
@@ -141,6 +130,9 @@ class Title(models.Model):
         related_name='titles',
         verbose_name='Жанры',
     )
+
+    # Менеджер — после полей, до Meta (порядок из coding-style Django).
+    objects = TitleQuerySet.as_manager()
 
     class Meta:
         """Настройки метаданных модели Title."""
@@ -173,7 +165,7 @@ class Review(models.Model):
     score = models.PositiveSmallIntegerField(
         validators=[
             MinValueValidator(SCORE_MIN, 'Оценка не может быть ниже 1'),
-            MaxValueValidator(SCORE_MAX, 'Оценка не может быть выше 10')
+            MaxValueValidator(SCORE_MAX, 'Оценка не может быть выше 10'),
         ],
         verbose_name='Оценка произведения',
     )

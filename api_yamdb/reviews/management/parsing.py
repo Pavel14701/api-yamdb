@@ -5,6 +5,7 @@ Django. Бросает исключения из reviews.management.exceptions,
 которые команда ловит как ожидаемые.
 """
 
+from collections.abc import Mapping
 from typing import Any
 
 from reviews.management.exceptions import (
@@ -26,7 +27,7 @@ CSV_FIELD_ALIASES = {
 
 
 def parse_row(
-        row: dict[str, Any],
+        row: Mapping[str, Any],
         fields: tuple[str, ...],
 ) -> dict[str, Any]:
     """Парсит строку CSV и возвращает словарь значений полей.

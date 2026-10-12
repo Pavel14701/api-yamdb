@@ -23,7 +23,7 @@ dev = [
     "django-stubs>=6.1.1",
     "djangorestframework-stubs>=3.18.1",
     "flake8==7.1.1",
-    "mypy>=2.3.1",
+    "mypy==2.3.0",
     "pytest==8.3.3",
     "pytest-django==4.9.0",
     "pytest-pythonpath==0.7.3",
@@ -63,11 +63,8 @@ convention = "google"
 [tool.mypy]
 python_version = "3.12"
 strict = true
-# Модули лежат в api_yamdb/ (api, api_yamdb, reviews, users),
-# поэтому путь поиска совпадает с pythonpath из pytest.ini
 mypy_path = ["api_yamdb"]
 files = ["api_yamdb"]
-# Корни пакетов определяются по mypy_path (как в рантайме)
 explicit_package_bases = true
 exclude = ["migrations"]
 plugins = [
@@ -77,5 +74,3 @@ plugins = [
 
 [tool.django-stubs]
 django_settings_module = "api_yamdb.settings"
-
-

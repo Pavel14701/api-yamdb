@@ -28,9 +28,7 @@ def _env_bool(name: str, default: bool) -> bool:
 
 def _env_list(name: str, default: str) -> tuple[str, ...]:
     """Читает список значений через запятую из переменной окружения."""
-    raw = os.environ.get(name)
-    if raw is None:
-        raw = default
+    raw = os.environ.get(name) or default
     return tuple(item.strip() for item in raw.split(',') if item.strip())
 
 
@@ -87,8 +85,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
-    'users',
     'api',
+    'users',
     'reviews',
 ]
 
@@ -222,11 +220,14 @@ def _has_monotone_run(chars: str, min_run: int) -> bool:
     return False
 
 
-def _is_periodic(chars: str, max_period: int) -> bool:
+def _is_periodic(characters: str, max_period: int) -> bool:
     """True, если строка целиком — повтор блока с периодом <= max_period."""
     return any(
-        len(chars) >= 2 * period
-        and all(ch == chars[i % period] for i, ch in enumerate(chars))
+        len(characters) >= 2 * period
+        and all(
+            character == characters[position % period]
+            for position, character in enumerate(characters)
+        )
         for period in range(1, max_period + 1)
     )
 
@@ -284,8 +285,8 @@ def validate_environment() -> None:
         )
     if not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS:
         raise ImproperlyConfigured(
-            "ALLOWED_HOSTS при DEBUG=False — непустой список хостов "
-            "через запятую ('*' запрещён: без хостов API недоступен, "
+            'ALLOWED_HOSTS при DEBUG=False — непустой список хостов '
+            'через запятую (\'*\' запрещён: без хостов API недоступен, '
             'с wildcard запросы отвергаются или опасны).'
         )
     if DEFAULT_FROM_EMAIL == 'noreply@yamdb.fake':

@@ -109,6 +109,7 @@ class GetTokenSerializer(serializers.Serializer[dict[str, Any]]):
         write_only=True,
     )
 
+    # Mapping избыточен DRF кладёт в validate именно dict
     def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         """Проверяет username и код подтверждения."""
         user = self._get_user(data['username'])
