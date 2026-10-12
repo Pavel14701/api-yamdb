@@ -4,7 +4,7 @@ from typing import Any, cast
 
 from django.db.models.query import QuerySet
 from django.shortcuts import get_object_or_404
-from django_filters.rest_framework import (  # type: ignore[import-untyped]
+from django_filters.rest_framework import (
     DjangoFilterBackend,
 )
 from rest_framework import filters, mixins, viewsets
