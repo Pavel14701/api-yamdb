@@ -2,7 +2,7 @@
 
 import csv
 from pathlib import Path
-from typing import Any, Protocol, cast, Type
+from typing import Any, Protocol, Type, cast
 
 from django.conf import settings
 from django.contrib.auth import get_user_model

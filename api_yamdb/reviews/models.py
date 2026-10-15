@@ -89,6 +89,7 @@ class TitleQuerySet(models.QuerySet['Title']):
     """QuerySet произведений с аннотациями для выдачи API."""
 
     def with_rating(self) -> 'TitleQuerySet':
+        """Добавляет аннотацию rating — округлённый средний балл отзывов."""
         return self.annotate(
             rating=Round(Avg('reviews__score'), output_field=IntegerField()),
         )
